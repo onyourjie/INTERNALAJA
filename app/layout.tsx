@@ -8,6 +8,8 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "RAJA Brawijaya - Panel Panitia",
   description: "Panel Panitia RAJA Brawijaya",
+  // memastikan viewport disertakan untuk perangkat mobile
+  viewport: "width=device-width, initial-scale=1",
 };
 
 export default function RootLayout({
@@ -17,11 +19,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id" className="h-full">
-      <body className={`${inter.className} h-full bg-gray-50 overflow-x-hidden`}>
+      <body
+        className={`${inter.className} h-full bg-gray-50 overflow-x-hidden`}
+      >
         <AuthProvider>
-          <div id="__next" className="relative h-full">
-            {children}
-          </div>
+          {/* Tidak perlu div #__next (Next.js sudah membuatnya),
+              cukup wrapper relative agar z-index anak bisa dipakai */}
+          <div className="relative min-h-screen">{children}</div>
         </AuthProvider>
       </body>
     </html>
