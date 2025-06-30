@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   ChevronDown,
   Search,
@@ -67,6 +68,7 @@ interface StatsData {
 }
 
 export default function DashboardKestari() {
+  const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -93,6 +95,7 @@ export default function DashboardKestari() {
   const [error, setError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  
   
   // Debug mode
   const [showDebug, setShowDebug] = useState(false);

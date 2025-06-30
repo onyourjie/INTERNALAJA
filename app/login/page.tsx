@@ -1,15 +1,26 @@
-// resources/js/Pages/Auth/Login.tsx
+// File: app/login/page.tsx
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 export default function Login() {
+    const { data: session, status } = useSession();
+    const router = useRouter();
     const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Redirect jika sudah login
+    useEffect(() => {
+        if (status === "authenticated" && session?.user) {
+            router.push("/auth/redirect-checker");
+        }
+    }, [session, status, router]);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -42,8 +53,8 @@ export default function Login() {
                     toast.error(data.message || 'An error occurred');
                 }
             } else {
-                // Successful login
-                window.location.href = '/dashboard';
+                // Successful login - redirect ke checker
+                router.push('/auth/redirect-checker');
             }
         } catch {
             toast.error('An error occurred. Please try again.');
@@ -51,6 +62,30 @@ export default function Login() {
             setIsSubmitting(false);
         }
     };
+
+    // Show loading jika sedang mengecek session
+    if (status === "loading") {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-gray-50">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Memeriksa session...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Jika sudah authenticated, jangan tampilkan form login
+    if (status === "authenticated") {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-gray-50">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Mengarahkan ke dashboard...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="relative h-screen w-full overflow-hidden text-white">

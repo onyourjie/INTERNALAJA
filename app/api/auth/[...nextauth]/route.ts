@@ -1,4 +1,5 @@
-// app/api/auth/[...nextauth]/route.ts
+// File: app/api/auth/[...nextauth]/route.ts (Updated)
+
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import type { AuthOptions } from "next-auth";
@@ -76,6 +77,14 @@ export const authOptions: AuthOptions = {
           return "/?error=NotRegisteredPanitia";
         }
 
+        // Debug: Log Google profile info
+        console.log("🔍 Google Profile Info:", {
+          email,
+          name: userName,
+          image: user.image,
+          profile_picture: profile.picture
+        });
+
         return true;
       } catch (error) {
         console.error("Database error during sign-in:", error);
@@ -95,10 +104,20 @@ export const authOptions: AuthOptions = {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const dbUser = rows[0] as any;
             
-            // Update session dengan data dari database
+            // Update session dengan data dari database, tapi preserve Google image
             session.user.id = dbUser.id;
             if (dbUser.name) session.user.name = dbUser.name;
-            if (dbUser.image) session.user.image = dbUser.image;
+            // Prioritaskan Google image dari provider, fallback ke database
+            if (!session.user.image && dbUser.image) {
+              session.user.image = dbUser.image;
+            }
+            
+            console.log("🔍 Session callback - Final user data:", {
+              id: session.user.id,
+              name: session.user.name,
+              email: session.user.email,
+              image: session.user.image
+            });
           }
         } catch (error) {
           console.error("Database error during session retrieval:", error);
@@ -114,11 +133,24 @@ export const authOptions: AuthOptions = {
         token.picture = user.image;
       }
       return token;
+    },
+
+    // Custom redirect berdasarkan divisi
+    async redirect({ url, baseUrl }) {
+      // Jika URL sudah absolut dan bukan dari domain yang sama, gunakan baseUrl
+      if (url.startsWith("/")) {
+        return `${baseUrl}${url}`;
+      } else if (new URL(url).origin === baseUrl) {
+        return url;
+      }
+      
+      // Default redirect ke halaman redirect checker
+      return `${baseUrl}/auth/redirect-checker`;
     }
   },
   pages: {
-    signIn: "/",
-    error: "/",
+    signIn: "/login",
+    error: "/login",
   },
   session: {
     strategy: "jwt",

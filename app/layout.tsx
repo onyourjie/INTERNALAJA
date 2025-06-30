@@ -1,7 +1,10 @@
+// File: app/layout.tsx
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/components/SessionProvider";
+import { UserProvider } from "@/contexts/UserContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,9 +26,11 @@ export default function RootLayout({
         className={`${inter.className} h-full bg-gray-50 overflow-x-hidden`}
       >
         <AuthProvider>
-          {/* Tidak perlu div #__next (Next.js sudah membuatnya),
-              cukup wrapper relative agar z-index anak bisa dipakai */}
-          <div className="relative min-h-screen">{children}</div>
+          <UserProvider>
+            {/* Tidak perlu div #__next (Next.js sudah membuatnya),
+                cukup wrapper relative agar z-index anak bisa dipakai */}
+            <div className="relative min-h-screen">{children}</div>
+          </UserProvider>
         </AuthProvider>
       </body>
     </html>
