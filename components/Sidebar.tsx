@@ -9,8 +9,11 @@ import {
   LayoutDashboard, 
   UserPlus,
   QrCode,
+  Users,
+  Calendar,
   Menu,
-  X
+  X,
+  UtensilsCrossed,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -29,26 +32,50 @@ const Sidebar = ({ isOpen, onToggle, onClose }: SidebarProps) => {
     setMounted(true)
   }, [])
 
-  const menuItems = [
-    {
-      name: 'Dashboard',
-      href: '/dashboard',
-      icon: LayoutDashboard,
-      description: 'Halaman utama dashboard'
-    },
-    {
-      name: 'Tambah Admin',
-      href: '/panitia/tambah',
-      icon: UserPlus,
-      description: 'Tambahkan anggota panitia baru'
-    },
-    {
-      name: 'Tambah Panitia',
-      href: '/panitia/buatqr',
-      icon: QrCode,
-      description: 'Tambahkan peserta dengan QR Code'
-    },
-  ]
+  /* cuplikan menuItems di Sidebar.tsx */
+const menuItems = [
+  {
+    name: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    description: "Halaman utama dashboard",
+  },
+  {
+    name: "Tambah Admin",
+    href: "/panitia/tambah",
+    icon: UserPlus,
+    description: "Tambahkan anggota panitia baru",
+  },
+  {
+    name: "Tambah Panitia",
+    href: "/panitia/buatqr",
+    icon: QrCode,
+    description: "Tambahkan peserta dengan QR Code",
+  },
+
+  // ────── ➜ Tambahan baru
+  {
+    name: "Daftar Kegiatan",
+    href: "/panitia/daftarkegiatan",
+    icon: Calendar,              // ikon kalender (lucide-react)
+    description: "Lihat semua kegiatan",
+  },
+  // ──────
+
+  {
+    name: "Kestari",
+    href: "/dashboardkestari",
+    icon: Users,
+    description: "Panel Kestari",
+  },
+  {
+    name: "Konsumsi",
+    href: "/dashboardkonsumsi",
+    icon: UtensilsCrossed,
+    description: "Panel Konsumsi",
+  },
+]
+
 
   const toggleSidebar = () => {
     onToggle(!isOpen)
@@ -58,12 +85,10 @@ const Sidebar = ({ isOpen, onToggle, onClose }: SidebarProps) => {
     setImageError(true)
   }
 
-  // Close sidebar when route changes
   React.useEffect(() => {
     onClose()
   }, [pathname, onClose])
 
-  // Prevent body scroll when sidebar is open on mobile
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       if (isOpen) {
@@ -81,7 +106,7 @@ const Sidebar = ({ isOpen, onToggle, onClose }: SidebarProps) => {
     }
   }, [isOpen])
 
-  if (!mounted) return null;
+  if (!mounted) return null
 
   return (
     <>
@@ -145,8 +170,6 @@ const Sidebar = ({ isOpen, onToggle, onClose }: SidebarProps) => {
                         }`}
                       />
                       <span className="font-medium">{item.name}</span>
-                      
-                      {/* Active indicator */}
                       {isActive && (
                         <div className="absolute right-2 w-2 h-2 bg-white rounded-full opacity-80" />
                       )}
@@ -171,7 +194,6 @@ const Sidebar = ({ isOpen, onToggle, onClose }: SidebarProps) => {
                     referrerPolicy="no-referrer"
                     sizes="40px"
                   />
-                  {/* Online indicator */}
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />
                 </div>
               ) : (
@@ -245,8 +267,6 @@ const Sidebar = ({ isOpen, onToggle, onClose }: SidebarProps) => {
                         }`}
                       />
                       <span className="font-medium">{item.name}</span>
-                      
-                      {/* Active indicator */}
                       {isActive && (
                         <div className="absolute right-2 w-2 h-2 bg-white rounded-full opacity-80" />
                       )}
@@ -271,7 +291,6 @@ const Sidebar = ({ isOpen, onToggle, onClose }: SidebarProps) => {
                     referrerPolicy="no-referrer"
                     sizes="40px"
                   />
-                  {/* Online indicator */}
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />
                 </div>
               ) : (
