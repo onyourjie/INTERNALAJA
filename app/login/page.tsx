@@ -54,17 +54,6 @@ export default function Login() {
 
     return (
         <div className="relative h-screen w-full overflow-hidden text-white">
-            {/* Background Video */}
-            <iframe
-                className="pointer-events-none absolute h-full w-full object-cover object-center"
-                src="https://www.youtube.com/embed/Fnpda4PMJKU?autoplay=1&mute=1&controls=0&loop=1&playlist=Fnpda4PMJKU&modestbranding=1&showinfo=0"
-                title="Background Video"
-                allow="autoplay; fullscreen"
-                allowFullScreen
-            />
-
-            {/* Overlay untuk membuat video lebih gelap */}
-            <div className="absolute inset-0 bg-black/50" />
 
             {/* Login Content */}
             <div className="flex min-h-screen items-center justify-center px-4">
