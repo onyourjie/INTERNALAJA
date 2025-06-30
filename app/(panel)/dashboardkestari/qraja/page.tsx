@@ -73,8 +73,8 @@ export default function QRScannerPage() {
   const lastScanTimeRef = useRef<number>(0); // Ultra-fast time-based debouncing
   const isErrorStateRef = useRef(false); // Prevent error spam
   const processingCacheRef = useRef<Map<string, any>>(new Map()); // Cache API responses
-  const autoRestartTimerRef = useRef<NodeJS.Timeout | null>(null); // FIXED: Timer reference
-  const userStoppedRef = useRef(false); // FIXED: Track user intention to stop
+  const autoRestartTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer reference
+  const userStoppedRef = useRef(false); // Track user intention to stop
 
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState("");
@@ -160,7 +160,7 @@ export default function QRScannerPage() {
     }
   }, []);
 
-  // FIXED: Clear all timers
+  // Clear all timers
   const clearAllTimers = useCallback(() => {
     if (autoRestartTimerRef.current) {
       clearTimeout(autoRestartTimerRef.current);
@@ -289,7 +289,7 @@ export default function QRScannerPage() {
   const tanggalFormatted = tgl ? formatTanggalIndonesia(tgl) : "Tanggal tidak valid";
   const dateValidation = validateTanggalKegiatan();
 
-  // HYPER-FAST handleScan with EXTREME optimizations for Absensi
+  // ✅ COMPLETE ENHANCED handleScan with DETAILED DIVISI VALIDATION
   const handleScan = useCallback(
     async (result: string) => {
       // HYPER-FAST spam prevention - REDUCED to 500ms!!!
@@ -638,7 +638,7 @@ export default function QRScannerPage() {
             hideClass: { popup: 'animate__animated animate__fadeOut animate__faster' }
           });
         } else {
-          // ULTRA-FAST error handling for Absensi
+          // ✅ ENHANCED error handling untuk Absensi dengan DETAILED DIVISI VALIDATION
           console.log('❌ API returned error:', {
             status: response.status,
             success: jsonData.success,
@@ -646,72 +646,256 @@ export default function QRScannerPage() {
             data: jsonData.data
           });
 
-          let errorTitle = "❌ Anda sudah absensi";
+          let errorTitle = "❌ Absensi Gagal";
           let errorMessage = jsonData.message || "Terjadi kesalahan saat melakukan absensi";
           let errorIcon: 'error' | 'warning' = 'error';
           let errorHtml = '';
 
           if (response.status === 403) {
-            // Divisi tidak diizinkan
+            // ✅ ENHANCED: Divisi tidak diizinkan dengan info super detail
             errorTitle = "🚫 Divisi Tidak Diizinkan";
             errorIcon = 'warning';
             
-            if (jsonData.data?.divisi_yang_diizinkan) {
+            if (jsonData.data?.divisi_yang_diizinkan && jsonData.data?.panitia_divisi) {
+              const allowedDivisi = jsonData.data.divisi_yang_diizinkan;
+              const panitiaDiv = jsonData.data.panitia_divisi;
+              
+              errorHtml = `
+                <div class="text-left">
+                  <div class="text-center mb-3">
+                    <p class="font-bold text-red-600 text-lg">🚫 AKSES DITOLAK</p>
+                    <p class="text-sm text-gray-600">Divisi Anda tidak diizinkan untuk kegiatan ini</p>
+                  </div>
+                  
+                  <hr class="my-3 border-gray-300">
+                  
+                  <!-- Info Panitia -->
+                  <div class="bg-red-50 p-3 rounded-lg mb-3 border-l-4 border-red-400">
+                    <p class="font-bold text-red-800 mb-2 flex items-center">
+                      <span class="mr-2">👤</span> Data Panitia Saat Ini
+                    </p>
+                    <div class="space-y-1 text-sm">
+                      <p><strong>Nama:</strong> ${parsed.nama}</p>
+                      <p><strong>NIM:</strong> ${parsed.nim}</p>
+                      <p><strong>Divisi:</strong> 
+                        <span class="bg-red-200 text-red-800 px-2 py-1 rounded font-bold">
+                          ${panitiaDiv}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <!-- Info Kegiatan -->
+                  <div class="bg-blue-50 p-3 rounded-lg mb-3 border-l-4 border-blue-400">
+                    <p class="font-bold text-blue-800 mb-2 flex items-center">
+                      <span class="mr-2">📋</span> Info Kegiatan
+                    </p>
+                    <div class="space-y-1 text-sm">
+                      <p><strong>Nama:</strong> ${kNama}</p>
+                      <p><strong>Tanggal:</strong> ${currentTanggalFormatted}</p>
+                      ${rid ? `<p><strong>Rangkaian:</strong> ${jsonData.data?.rangkaian_nama || 'Multiple Event'}</p>` : ''}
+                    </div>
+                  </div>
+                  
+                  <!-- Divisi Yang Diizinkan -->
+                  <div class="bg-green-50 p-3 rounded-lg border-l-4 border-green-400">
+                    <p class="font-bold text-green-800 mb-2 flex items-center">
+                      <span class="mr-2">✅</span> Divisi Yang Diizinkan
+                    </p>
+                    <div class="grid grid-cols-1 gap-2 text-sm">
+                      ${allowedDivisi.slice(0, 6).map((d: any, index: number) => 
+                        `<div class="flex items-center gap-2 p-2 bg-white rounded border">
+                          <span class="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span>
+                          <span class="font-medium text-green-700">${d.nama}</span>
+                        </div>`
+                      ).join('')}
+                      ${allowedDivisi.length > 6 ? 
+                        `<div class="text-center text-gray-600 text-xs mt-2 p-2 bg-gray-100 rounded">
+                          + ${allowedDivisi.length - 6} divisi lainnya
+                        </div>` 
+                        : ''}
+                    </div>
+                  </div>
+                  
+                  <hr class="my-3 border-gray-300">
+                  
+                  <!-- Call to Action -->
+                  <div class="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-400 text-center">
+                    <p class="text-yellow-800 font-medium text-sm">
+                      💡 <strong>Solusi:</strong> Hubungi koordinator untuk:
+                    </p>
+                    <ul class="text-xs text-yellow-700 mt-2 space-y-1">
+                      <li>• Konfirmasi divisi yang benar</li>
+                      <li>• Update data divisi di sistem</li>
+                      <li>• Izin khusus untuk kegiatan ini</li>
+                    </ul>
+                  </div>
+                </div>
+              `;
+            } else if (jsonData.data?.divisi_yang_diizinkan) {
+              // Fallback jika panitia_divisi tidak ada
               const allowedDivisi = jsonData.data.divisi_yang_diizinkan;
               
               errorHtml = `
                 <div class="text-left">
-                  <p class="mb-2 text-center font-semibold">${errorMessage}</p>
-                  <hr class="my-2">
-                  <div class="bg-gray-50 p-2 rounded mb-2 text-sm">
+                  <p class="mb-3 text-center font-semibold text-red-600">${errorMessage}</p>
+                  <hr class="my-3">
+                  <div class="bg-gray-50 p-3 rounded mb-3 text-sm border-l-4 border-red-400">
                     <p><strong>Panitia:</strong> ${parsed.nama}</p>
                     <p><strong>Divisi:</strong> <span class="text-red-600 font-bold">${parsed.divisi}</span></p>
                   </div>
-                  <div class="bg-blue-50 p-2 rounded text-sm">
-                    <p class="font-semibold text-blue-800 mb-1">📋 Divisi Diizinkan:</p>
-                    ${allowedDivisi.slice(0, 3).map((d: any) => `<p>• ${d.nama}</p>`).join('')}
-                    ${allowedDivisi.length > 3 ? `<p class="text-gray-600">+ ${allowedDivisi.length - 3} lainnya</p>` : ''}
+                  <div class="bg-blue-50 p-3 rounded text-sm border-l-4 border-green-400">
+                    <p class="font-semibold text-green-800 mb-2">📋 Divisi Diizinkan:</p>
+                    ${allowedDivisi.slice(0, 4).map((d: any) => `<p>• ${d.nama}</p>`).join('')}
+                    ${allowedDivisi.length > 4 ? `<p class="text-gray-600">+ ${allowedDivisi.length - 4} lainnya</p>` : ''}
                   </div>
+                </div>
+              `;
+            } else {
+              // Fallback minimal
+              errorHtml = `
+                <div class="text-center">
+                  <p class="mb-3 font-semibold text-red-600">${errorMessage}</p>
+                  <div class="bg-red-50 p-3 rounded text-sm">
+                    <p><strong>Panitia:</strong> ${parsed.nama}</p>
+                    <p><strong>Divisi:</strong> <span class="text-red-600 font-bold">${parsed.divisi}</span></p>
+                  </div>
+                  <p class="text-xs text-gray-600 mt-2">💡 Hubungi koordinator untuk info divisi yang diizinkan</p>
                 </div>
               `;
             }
           } else if (response.status === 409) {
-            // Absensi sudah dilakukan atau blocked
-            errorTitle = "🚫 Anda sudah melakukan absensi";
+            // Absensi sudah dilakukan
+            errorTitle = "⚠️ Sudah Absen";
             errorIcon = 'warning';
             
-            if (jsonData.message?.includes("Already attended")) {
-              errorTitle = "❌ Sudah Absen";
-              errorMessage = "Panitia sudah melakukan absensi sebelumnya.";
+            if (jsonData.message?.includes("Already attended") || jsonData.message?.includes("sudah melakukan absensi")) {
+              errorMessage = "Anda sudah melakukan absensi sebelumnya.";
             }
             
             errorHtml = `
               <div class="text-center">
-                <p class="mb-2 font-semibold">${errorMessage}</p>
-                <div class="bg-gray-50 p-2 rounded text-sm">
-                  <p><strong>Nama:</strong> ${parsed.nama}</p>
-                  <p><strong>NIM:</strong> ${parsed.nim}</p>
+                <div class="mb-3">
+                  <p class="text-2xl mb-2">✅</p>
+                  <p class="font-bold text-orange-600 text-lg">Sudah Tercatat</p>
+                  <p class="text-sm text-gray-600">${errorMessage}</p>
+                </div>
+                
+                <hr class="my-3">
+                
+                <div class="bg-orange-50 p-3 rounded text-sm border-l-4 border-orange-400 text-left">
+                  <p class="font-semibold text-orange-800 mb-2">👤 Data Panitia:</p>
+                  <div class="space-y-1">
+                    <p><strong>Nama:</strong> ${parsed.nama}</p>
+                    <p><strong>NIM:</strong> ${parsed.nim}</p>
+                    <p><strong>Divisi:</strong> ${parsed.divisi}</p>
+                  </div>
+                </div>
+                
+                <hr class="my-3">
+                
+                <div class="bg-blue-50 p-3 rounded text-sm border-l-4 border-blue-400 text-left">
+                  <p class="font-semibold text-blue-800 mb-2">📋 Kegiatan:</p>
+                  <div class="space-y-1">
+                    <p><strong>Nama:</strong> ${kNama}</p>
+                    <p><strong>Tanggal:</strong> ${currentTanggalFormatted}</p>
+                  </div>
+                </div>
+                
+                <div class="mt-3 p-2 bg-green-100 rounded">
+                  <p class="text-sm">
+                    <span class="text-green-600 font-bold">✅ Status: HADIR</span>
+                  </p>
                 </div>
               </div>
             `;
           } else if (response.status === 404) {
             // Panitia tidak ditemukan
-            errorTitle = "❌ Panitia Tidak Ditemukan";
+            errorTitle = "❌ Data Tidak Ditemukan";
+            
+            let notFoundType = "Panitia tidak ditemukan di sistem";
+            if (jsonData.message?.includes("Kegiatan")) {
+              notFoundType = "Kegiatan tidak ditemukan atau tidak aktif";
+            }
+            
             errorHtml = `
               <div class="text-center">
-                <p class="mb-2">${errorMessage}</p>
-                <div class="bg-gray-50 p-2 rounded text-sm">
-                  <p><strong>NIM:</strong> ${parsed.nim}</p>
-                  <p><strong>Nama:</strong> ${parsed.nama}</p>
+                <div class="mb-3">
+                  <p class="text-4xl mb-2">🔍</p>
+                  <p class="font-bold text-red-600 text-lg">Data Tidak Ditemukan</p>
+                  <p class="text-sm text-gray-600">${notFoundType}</p>
+                </div>
+                
+                <hr class="my-3">
+                
+                <div class="bg-red-50 p-3 rounded text-sm border-l-4 border-red-400 text-left">
+                  <p class="font-semibold text-red-800 mb-2">❌ Data QR Code:</p>
+                  <div class="space-y-1">
+                    <p><strong>NIM:</strong> ${parsed.nim}</p>
+                    <p><strong>Nama:</strong> ${parsed.nama}</p>
+                    <p><strong>Divisi:</strong> ${parsed.divisi}</p>
+                  </div>
+                </div>
+                
+                <div class="mt-3 bg-yellow-50 p-3 rounded border-l-4 border-yellow-400">
+                  <p class="text-xs text-yellow-800">
+                    💡 <strong>Kemungkinan penyebab:</strong><br>
+                    • Data panitia belum terdaftar<br>
+                    • QR Code sudah kadaluarsa<br>
+                    • Data telah diubah di sistem
+                  </p>
                 </div>
               </div>
             `;
+          } else if (response.status === 400) {
+            // Bad request - QR tidak valid atau data tidak sesuai
+            errorTitle = "❌ Data Tidak Valid";
+            if (jsonData.message?.includes("tidak sesuai")) {
+              errorMessage = "Data QR Code tidak sesuai dengan data panitia di sistem.";
+              errorHtml = `
+                <div class="text-center">
+                  <div class="mb-3">
+                    <p class="text-4xl mb-2">⚠️</p>
+                    <p class="font-bold text-red-600 text-lg">Data Tidak Sesuai</p>
+                    <p class="text-sm text-gray-600">${errorMessage}</p>
+                  </div>
+                  
+                  <hr class="my-3">
+                  
+                  <div class="bg-red-50 p-3 rounded text-sm border-l-4 border-red-400 text-left">
+                    <p class="font-semibold text-red-800 mb-2">❌ Data QR Code:</p>
+                    <div class="space-y-1">
+                      <p><strong>NIM:</strong> ${parsed.nim}</p>
+                      <p><strong>Nama:</strong> ${parsed.nama}</p>
+                      <p><strong>Divisi:</strong> ${parsed.divisi}</p>
+                    </div>
+                  </div>
+                  
+                  <div class="mt-3 bg-yellow-50 p-3 rounded border-l-4 border-yellow-400">
+                    <p class="text-xs text-yellow-800">
+                      💡 QR Code mungkin sudah kadaluarsa atau data telah berubah di sistem
+                    </p>
+                  </div>
+                </div>
+              `;
+            } else {
+              errorHtml = `
+                <div class="text-center">
+                  <p class="mb-2">${errorMessage}</p>
+                  <div class="bg-gray-50 p-2 rounded text-sm">
+                    <p><strong>Status:</strong> ${response.status}</p>
+                  </div>
+                </div>
+              `;
+            }
           } else {
+            // Generic error
             errorHtml = `
               <div class="text-center">
                 <p class="mb-2">${errorMessage}</p>
                 <div class="bg-gray-50 p-2 rounded text-sm">
                   <p><strong>Status:</strong> ${response.status}</p>
+                  <p><strong>Error Code:</strong> ${response.statusText}</p>
                 </div>
               </div>
             `;
@@ -719,14 +903,18 @@ export default function QRScannerPage() {
 
           await Swal.fire({
             title: errorTitle,
-            html: errorHtml || `<div class="text-center"><p>${errorMessage}</p></div>`,
+            html: errorHtml,
             icon: errorIcon,
             confirmButtonText: "OK",
-            timer: 900, // ULTRA FAST - 0.9s
-            width: '420px',
-            timerProgressBar: true,
+            timer: response.status === 403 ? 0 : 1200, // No timer untuk divisi error agar bisa dibaca
+            width: response.status === 403 ? '600px' : '420px', // Lebih lebar untuk divisi error
+            timerProgressBar: response.status !== 403,
             showClass: { popup: 'animate__animated animate__fadeIn animate__faster' },
-            hideClass: { popup: 'animate__animated animate__fadeOut animate__faster' }
+            hideClass: { popup: 'animate__animated animate__fadeOut animate__faster' },
+            customClass: {
+              container: 'swal-divisi-error',
+              popup: response.status === 403 ? 'swal-divisi-popup' : ''
+            }
           });
         }
 

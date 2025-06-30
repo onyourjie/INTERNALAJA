@@ -1225,9 +1225,6 @@ const BuatQRPage: React.FC = () => {
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Unique ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Nama Lengkap
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1271,9 +1268,6 @@ const BuatQRPage: React.FC = () => {
                           <Square className="w-4 h-4 text-gray-400" />
                         )}
                       </button>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-600">
-                      {peserta.unique_id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {peserta.nama_lengkap}

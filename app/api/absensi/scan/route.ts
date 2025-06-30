@@ -17,9 +17,11 @@ class LRU {
     this.c.set(k, v);
   }
 }
+
 const pCache = new LRU(500);
 const kCache = new LRU(100);
 const vCache = new LRU(1000);
+const dCache = new LRU(200); // ✅ NEW: Cache untuk divisi kegiatan
 const nCache = new Map<string, string>();
 
 const norm = (s = "", t: "nim" | "nama" | "div") => {
@@ -39,6 +41,7 @@ const norm = (s = "", t: "nim" | "nama" | "div") => {
     [...nCache.keys()].slice(0, 500).forEach((k) => nCache.delete(k));
   return r;
 };
+
 const lev = (a: string, b: string, m = 8) => {
   if (a === b) return 0;
   if (Math.abs(a.length - b.length) > m) return m + 1;
@@ -58,18 +61,21 @@ const lev = (a: string, b: string, m = 8) => {
   }
   return d[b.length][a.length];
 };
+
 const sim = (x: string, y: string) => {
   if (!x || !y) return 0;
   if (x === y) return 1;
   const l = Math.max(x.length, y.length);
   return Math.max(0, (l - lev(x, y, l)) / l);
 };
+
 const match = (d: string, q: string, t: "nim" | "nama" | "div") => {
   const s = sim(norm(d, t), norm(q, t));
   if (t === "nim") return s >= 0.95;
   if (t === "nama") return s >= 0.9;
   return s >= 0.8;
 };
+
 const validate = (s: string) => {
   const c = vCache.get(s);
   if (c) return c;
@@ -82,6 +88,63 @@ const validate = (s: string) => {
   } catch {
     return { ok: false };
   }
+};
+
+// ✅ NEW: Function untuk validasi divisi
+const validateDivisi = async (kegiatanId: number, panitiaId: number) => {
+  const cacheKey = `divisi_${kegiatanId}`;
+  let allowedDivisi = dCache.get(cacheKey);
+  
+  if (!allowedDivisi) {
+    // Ambil divisi yang diizinkan untuk kegiatan ini
+    const [divisiRows] = await db.execute<RowDataPacket[]>(
+      `SELECT DISTINCT divisi FROM kegiatan_divisi 
+       WHERE kegiatan_id = ? AND is_active = 1 
+       ORDER BY divisi`,
+      [kegiatanId]
+    );
+    
+    allowedDivisi = divisiRows.map(row => row.divisi.trim());
+    dCache.set(cacheKey, allowedDivisi);
+  }
+  
+  if (allowedDivisi.length === 0) {
+    return {
+      isAllowed: false,
+      error: "Tidak ada divisi yang diizinkan untuk kegiatan ini",
+      allowedDivisi: []
+    };
+  }
+  
+  // Ambil divisi panitia
+  const [panitiaRows] = await db.execute<RowDataPacket[]>(
+    `SELECT divisi FROM panitia_peserta 
+     WHERE id = ? AND is_active = 1 
+     LIMIT 1`,
+    [panitiaId]
+  );
+  
+  if (panitiaRows.length === 0) {
+    return {
+      isAllowed: false,
+      error: "Data panitia tidak ditemukan",
+      allowedDivisi
+    };
+  }
+  
+  const panitiaDiv = panitiaRows[0].divisi.trim();
+  
+  // Cek apakah divisi panitia termasuk dalam divisi yang diizinkan
+  const isAllowed = allowedDivisi.some(allowedDiv => 
+    match(allowedDiv, panitiaDiv, "div")
+  );
+  
+  return {
+    isAllowed,
+    panitiaDiv,
+    allowedDivisi,
+    error: isAllowed ? null : `Divisi "${panitiaDiv}" tidak diizinkan untuk kegiatan ini`
+  };
 };
 
 const push = async (req: NextRequest, p: any) => {
@@ -100,11 +163,17 @@ export async function POST(req: NextRequest) {
     koordinat_lat = null,
     koordinat_lng = null,
   } = await req.json();
+  
   if (!qr_data || !kegiatan_id)
-    return NextResponse.json({ success: false }, { status: 400 });
+    return NextResponse.json({ success: false, message: "Data tidak lengkap" }, { status: 400 });
+  
   const v = validate(qr_data);
-  if (!v.ok) return NextResponse.json({ success: false }, { status: 400 });
+  if (!v.ok) 
+    return NextResponse.json({ success: false, message: "QR Code tidak valid" }, { status: 400 });
+  
   const q = v.obj;
+  
+  // ✅ 1. Validasi panitia
   let panitia = pCache.get(`uid_${q.id}`);
   if (!panitia) {
     const [r] = await db.execute<RowDataPacket[]>(
@@ -112,26 +181,70 @@ export async function POST(req: NextRequest) {
       [q.id]
     );
     if (!r.length)
-      return NextResponse.json({ success: false }, { status: 404 });
+      return NextResponse.json({ 
+        success: false, 
+        message: "Panitia tidak ditemukan" 
+      }, { status: 404 });
     panitia = r[0];
     pCache.set(`uid_${q.id}`, panitia);
   }
+  
+  // ✅ 2. Validasi matching nim dan nama
   if (
     !match(panitia.nim, q.nim, "nim") ||
     !match(panitia.nama_lengkap, q.nama, "nama")
   )
-    return NextResponse.json({ success: false }, { status: 400 });
+    return NextResponse.json({ 
+      success: false, 
+      message: "Data QR tidak sesuai dengan data panitia" 
+    }, { status: 400 });
+  
+  // ✅ 3. Validasi kegiatan
   let keg = kCache.get(`k_${kegiatan_id}`);
   if (!keg) {
     const [r] = await db.execute<RowDataPacket[]>(
-      "SELECT id FROM kegiatan WHERE id=? AND is_active=1 LIMIT 1",
+      "SELECT id,nama FROM kegiatan WHERE id=? AND is_active=1 LIMIT 1",
       [kegiatan_id]
     );
     if (!r.length)
-      return NextResponse.json({ success: false }, { status: 404 });
+      return NextResponse.json({ 
+        success: false, 
+        message: "Kegiatan tidak ditemukan" 
+      }, { status: 404 });
     keg = r[0];
     kCache.set(`k_${kegiatan_id}`, keg);
   }
+  
+  // ✅ 4. VALIDASI DIVISI - INI YANG HILANG!
+  try {
+    const divisiValidation = await validateDivisi(kegiatan_id, panitia.id);
+    
+    if (!divisiValidation.isAllowed) {
+      console.log(`❌ DIVISI TIDAK DIIZINKAN: ${panitia.nim} (${divisiValidation.panitiaDiv}) untuk kegiatan ${keg.nama}`);
+      
+      return NextResponse.json({
+        success: false,
+        message: divisiValidation.error,
+        data: {
+          panitia_divisi: divisiValidation.panitiaDiv,
+          divisi_yang_diizinkan: divisiValidation.allowedDivisi.map(div => ({
+            nama: div
+          }))
+        }
+      }, { status: 403 }); // 403 Forbidden
+    }
+    
+    console.log(`✅ DIVISI VALID: ${panitia.nim} (${divisiValidation.panitiaDiv}) diizinkan untuk kegiatan ${keg.nama}`);
+    
+  } catch (divisiError) {
+    console.error("Error validating divisi:", divisiError);
+    return NextResponse.json({
+      success: false,
+      message: "Gagal memvalidasi divisi"
+    }, { status: 500 });
+  }
+  
+  // ✅ 5. Cek duplikasi absensi
   const today = new Date().toISOString().slice(0, 10);
   const [dup] = await db.execute<RowDataPacket[]>(
     `SELECT id,status FROM absensi 
@@ -146,15 +259,22 @@ export async function POST(req: NextRequest) {
       kegiatan_rangkaian_id,
     ]
   );
+  
   let id = dup[0]?.id;
   if (dup.length) {
     if (dup[0].status === "Hadir")
-      return NextResponse.json({ success: false, msg: "dup" }, { status: 409 });
+      return NextResponse.json({ 
+        success: false, 
+        message: "Anda sudah melakukan absensi sebelumnya" 
+      }, { status: 409 });
+    
+    // Update absensi yang sudah ada
     await db.execute(
       'UPDATE absensi SET status="Hadir",waktu_absensi=NOW(),metode_absensi="QR Code",qr_data=? WHERE id=?',
       [qr_data, id]
     );
   } else {
+    // Insert absensi baru
     const [ins] = await db.execute(
       "INSERT INTO absensi (panitia_id,kegiatan_id,kegiatan_rangkaian_id,tanggal_absensi,status,waktu_absensi,metode_absensi,qr_data,koordinat_lat,koordinat_lng) VALUES (?,?,?,?,'Hadir',NOW(),'QR Code',?,?,?)",
       [
@@ -169,6 +289,42 @@ export async function POST(req: NextRequest) {
     );
     id = (ins as any).insertId;
   }
+  
+  // ✅ 6. Push notification
   await push(req, { kind: "update", kegiatan_id, tanggal: today });
-  return NextResponse.json({ success: true, id });
+  
+  // ✅ 7. Response sukses dengan detail
+  const rangkaianInfo = kegiatan_rangkaian_id ? await getRangkaianInfo(kegiatan_rangkaian_id) : null;
+  
+  return NextResponse.json({ 
+    success: true, 
+    message: "Absensi berhasil dicatat",
+    data: {
+      id,
+      panitia: {
+        nama: panitia.nama_lengkap,
+        nim: panitia.nim,
+        divisi: panitia.divisi
+      },
+      kegiatan: {
+        nama: keg.nama
+      },
+      rangkaian_nama: rangkaianInfo?.judul || null,
+      tanggal: today,
+      waktu: new Date().toLocaleTimeString('id-ID')
+    }
+  });
+}
+
+// ✅ Helper function untuk get rangkaian info
+async function getRangkaianInfo(rangkaianId: number) {
+  try {
+    const [rows] = await db.execute<RowDataPacket[]>(
+      "SELECT judul FROM kegiatan_rangkaian WHERE id=? AND is_active=1 LIMIT 1",
+      [rangkaianId]
+    );
+    return rows[0] || null;
+  } catch {
+    return null;
+  }
 }
