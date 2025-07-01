@@ -1,8 +1,9 @@
+/* eslint-disable prefer-const */
 "use client"
 
 import { useState, FormEvent } from "react"
 import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
+import { motion } from 'framer-motion';
 import Swal from "sweetalert2"
 import "sweetalert2/dist/sweetalert2.min.css"
 

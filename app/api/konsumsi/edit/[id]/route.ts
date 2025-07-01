@@ -58,10 +58,10 @@ const formatDateForDB = (dateInput: string): string => {
 // GET - Ambil detail konsumsi berdasarkan NIM (parameter id = NIM)
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const nimParam = params.id; // Parameter [id] yang berisi NIM
+    const { id: nimParam } = await context.params; // Await the params promise
     const { searchParams } = new URL(request.url);
     const kegiatan_id = searchParams.get('kegiatan_id');
     const kegiatan_rangkaian_id = searchParams.get('kegiatan_rangkaian_id');
@@ -344,10 +344,10 @@ export async function GET(
 // PUT - Update konsumsi berdasarkan NIM (parameter id = NIM)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const nimParam = params.id; // Parameter [id] yang berisi NIM
+    const { id: nimParam } = await context.params; // Await the params promise
     const body = await request.json();
     const { searchParams } = new URL(request.url);
     

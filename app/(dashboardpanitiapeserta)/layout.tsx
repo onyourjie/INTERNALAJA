@@ -3,11 +3,21 @@
 import React, { useCallback, useState } from "react"
 import { signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import Sidebar from "@/components/Sidebar"
 import { useUser } from "@/contexts/UserContext"
 
+// Type definitions
+interface EnhancedProfileAvatarProps {
+  imageUrl?: string
+  name?: string
+  size?: "sm" | "md" | "lg" | "xl"
+  showBorder?: boolean
+  borderColor?: string
+}
+
 // Enhanced ProfileAvatar Component dengan perfect circle
-const EnhancedProfileAvatar = ({ 
+const EnhancedProfileAvatar: React.FC<EnhancedProfileAvatarProps> = ({ 
   imageUrl, 
   name, 
   size = "lg",
@@ -16,27 +26,27 @@ const EnhancedProfileAvatar = ({
 }) => {
   const [imageError, setImageError] = useState(false)
   
-  // Size configurations
-  const sizeClasses = {
+  // Size configurations with proper typing
+  const sizeClasses: Record<string, string> = {
     sm: "w-8 h-8",
     md: "w-10 h-10", 
     lg: "w-12 h-12",
     xl: "w-16 h-16"
   }
   
-  const textSizeClasses = {
+  const textSizeClasses: Record<string, string> = {
     sm: "text-xs",
     md: "text-sm",
     lg: "text-base", 
     xl: "text-xl"
   }
 
-  // Get initials from name
-  const getInitials = (name) => {
+  // Get initials from name with proper typing
+  const getInitials = (name?: string): string => {
     if (!name) return "U"
     return name
       .split(" ")
-      .map(word => word.charAt(0))
+      .map((word: string) => word.charAt(0))
       .join("")
       .substring(0, 2)
       .toUpperCase()
@@ -56,14 +66,17 @@ const EnhancedProfileAvatar = ({
   return (
     <div className={baseClasses}>
       {imageUrl && !imageError ? (
-        <img
+        <Image
           src={imageUrl}
           alt={name || "Profile"}
-          className="w-full h-full object-cover object-center"
+          width={48}
+          height={48}
+          className="w-full h-full object-cover object-center rounded-full"
           onError={() => setImageError(true)}
           onLoad={(e) => {
             // Ensure image is properly loaded and centered
-            e.currentTarget.style.objectPosition = "center center"
+            const target = e.currentTarget as HTMLImageElement
+            target.style.objectPosition = "center center"
           }}
         />
       ) : (
@@ -187,13 +200,12 @@ function DashboardPanitiaPesertaLayout({ children }: DashboardPanitiaPesertaLayo
       <div className="flex flex-col flex-1">
         {/* Header mobile (hanya tampil jika user PIT) */}
         {isPITUser && (
-          <div className="sticky top-0 z-40 lg:hidden h-14 w-full flex items-center gap-2"
+          <div className="sticky top-0 z-40 lg:hidden h-14 w-full flex items-center gap-2 border-b"
                style={{
                  background: 'rgba(249, 250, 251, 0.95)',
                  backdropFilter: 'blur(8px)',
                  borderBottomColor: 'rgba(72, 145, 161, 0.2)'
-               }}
-               className="border-b">
+               }}>
             {/* Burger */}
             <button
               aria-label="Buka sidebar"
@@ -231,7 +243,7 @@ function DashboardPanitiaPesertaLayout({ children }: DashboardPanitiaPesertaLayo
                 {userData && (
                   <div className="flex items-center gap-3">
                     <EnhancedProfileAvatar 
-                      imageUrl={userData.profile_image}
+                      imageUrl={userData.profile_image ?? undefined}
                       name={userData.nama_lengkap}
                       size="lg"
                       showBorder={true}

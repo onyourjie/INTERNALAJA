@@ -20,7 +20,7 @@ interface UserData {
   jabatan_nama: string;
   // Flag divisi
   isPIT: boolean;
-  // Google Profile Image - FIELD YANG DITAMBAHKAN
+  // Google Profile Image
   profile_image?: string | null;
 }
 
@@ -66,19 +66,45 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
       const data = await response.json();
       
-      if (data.error) {
-        throw new Error(data.error);
+      console.log('🔍 UserContext: Raw API response:', data);
+
+      if (!data.success) {
+        throw new Error(data.error || data.message || 'API returned error');
       }
 
+      // Check if panitia data exists
+      if (!data.data?.panitia) {
+        throw new Error('No panitia data found for this user');
+      }
+
+      // Map the nested API response to flat UserData structure
+      const userData: UserData = {
+        // Session data
+        session_id: data.data.session.user.id,
+        session_name: data.data.session.user.name,
+        session_image: data.data.session.user.image,
+        // Panitia data
+        panitia_id: data.data.panitia.id,
+        nama_lengkap: data.data.panitia.nama_lengkap,
+        email: data.data.panitia.email,
+        divisi_id: data.data.panitia.divisi_id,
+        jabatan_id: data.data.panitia.jabatan_id,
+        divisi_nama: data.data.panitia.divisi_nama,
+        jabatan_nama: data.data.panitia.jabatan_nama,
+        isPIT: data.data.panitia.isPIT,
+        // Profile image (prioritize session image)
+        profile_image: data.data.session.user.image
+      };
+
       console.log('✅ UserContext: User data loaded:', {
-        nama: data.user.nama_lengkap,
-        divisi: data.user.divisi_nama,
-        isPIT: data.user.isPIT,
-        profile_image: data.user.profile_image,
-        session_image: data.user.session_image
+        nama: userData.nama_lengkap,
+        divisi: userData.divisi_nama,
+        isPIT: userData.isPIT,
+        profile_image: userData.profile_image,
+        session_image: userData.session_image
       });
 
-      setUserData(data.user);
+      setUserData(userData);
     } catch (err: any) {
       console.error('❌ UserContext: Error fetching user data:', err);
       setError(err.message || 'Failed to fetch user data');

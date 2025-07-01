@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { db, RowDataPacket } from "@/lib/db";
 
@@ -13,7 +15,10 @@ class LRU {
   }
   set(k: string, v: any) {
     if (this.c.has(k)) this.c.delete(k);
-    else if (this.c.size >= this.m) this.c.delete(this.c.keys().next().value);
+    else if (this.c.size >= this.m) {
+      const firstKey = this.c.keys().next().value;
+      if (typeof firstKey !== "undefined") this.c.delete(firstKey);
+    }
     this.c.set(k, v);
   }
 }
@@ -104,7 +109,7 @@ const validateDivisi = async (kegiatanId: number, panitiaId: number) => {
       [kegiatanId]
     );
     
-    allowedDivisi = divisiRows.map(row => row.divisi.trim());
+    allowedDivisi = divisiRows.map((row: RowDataPacket) => (row.divisi as string).trim());
     dCache.set(cacheKey, allowedDivisi);
   }
   
@@ -132,10 +137,10 @@ const validateDivisi = async (kegiatanId: number, panitiaId: number) => {
     };
   }
   
-  const panitiaDiv = panitiaRows[0].divisi.trim();
+  const panitiaDiv = (panitiaRows[0].divisi as string).trim();
   
   // Cek apakah divisi panitia termasuk dalam divisi yang diizinkan
-  const isAllowed = allowedDivisi.some(allowedDiv => 
+  const isAllowed = allowedDivisi.some((allowedDiv: string) => 
     match(allowedDiv, panitiaDiv, "div")
   );
   
@@ -191,8 +196,8 @@ export async function POST(req: NextRequest) {
   
   // ✅ 2. Validasi matching nim dan nama
   if (
-    !match(panitia.nim, q.nim, "nim") ||
-    !match(panitia.nama_lengkap, q.nama, "nama")
+    !match(panitia.nim as string, q.nim, "nim") ||
+    !match(panitia.nama_lengkap as string, q.nama, "nama")
   )
     return NextResponse.json({ 
       success: false, 
@@ -217,7 +222,7 @@ export async function POST(req: NextRequest) {
   
   // ✅ 4. VALIDASI DIVISI - INI YANG HILANG!
   try {
-    const divisiValidation = await validateDivisi(kegiatan_id, panitia.id);
+    const divisiValidation = await validateDivisi(kegiatan_id, panitia.id as number);
     
     if (!divisiValidation.isAllowed) {
       console.log(`❌ DIVISI TIDAK DIIZINKAN: ${panitia.nim} (${divisiValidation.panitiaDiv}) untuk kegiatan ${keg.nama}`);
@@ -227,7 +232,7 @@ export async function POST(req: NextRequest) {
         message: divisiValidation.error,
         data: {
           panitia_divisi: divisiValidation.panitiaDiv,
-          divisi_yang_diizinkan: divisiValidation.allowedDivisi.map(div => ({
+          divisi_yang_diizinkan: divisiValidation.allowedDivisi.map((div: string) => ({
             nama: div
           }))
         }

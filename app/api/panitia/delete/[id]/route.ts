@@ -3,12 +3,12 @@ import { db, RowDataPacket } from '@/lib/db';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const connection = await db.getConnection();
   
   try {
-    const { id } = params;
+    const { id } = await context.params; // Await the params promise
     
     // Validasi ID parameter
     if (!id || isNaN(Number(id))) {
@@ -22,7 +22,7 @@ export async function DELETE(
     }
 
     const panitiaId = parseInt(id);
-f
+
     // Start transaction untuk memastikan konsistensi data
     await connection.beginTransaction();
 
@@ -131,10 +131,10 @@ f
 // Method GET untuk informasi endpoint (opsional, untuk debugging)
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await context.params; // Await the params promise
     
     if (!id || isNaN(Number(id))) {
       return NextResponse.json(

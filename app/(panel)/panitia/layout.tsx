@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 
@@ -9,6 +9,7 @@ interface PanitiaLayoutProps {
 
 async function checkPITAccess(email: string): Promise<boolean> {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [rows]: any = await db.query(`
       SELECT p.id, p.nama_lengkap, d.nama as divisi_nama
       FROM panitia p
@@ -38,5 +39,6 @@ export default async function PanitiaLayout({ children }: PanitiaLayoutProps) {
     // Redirect ke halaman unauthorized
     redirect("/unauthorized");
   }
+  
   return <>{children}</>;
 }

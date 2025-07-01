@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -68,6 +69,7 @@ interface StatsData {
 }
 
 export default function DashboardKestari() {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -93,11 +95,13 @@ export default function DashboardKestari() {
   // State untuk loading dan error
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isGenerating, setIsGenerating] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   
   
   // Debug mode
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showDebug, setShowDebug] = useState(false);
   
   // Constants
@@ -163,6 +167,7 @@ export default function DashboardKestari() {
   // Auto refresh detection dari edit success
   useEffect(() => {
     const editSuccess = searchParams.get('edit');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const timestamp = searchParams.get('t');
     
     if (editSuccess === 'success') {
@@ -454,6 +459,7 @@ export default function DashboardKestari() {
       const result = await response.json();
       
       if (result.success) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cleanedData = result.data.map((item: any, apiIndex: number) => ({
           id: item.id || 0,
           panitia_id: item.panitia_id,
@@ -533,6 +539,7 @@ export default function DashboardKestari() {
         allowedDivisi = kegiatan.divisi || [];
       } else if (selectedRangkaianId && kegiatan.subKegiatan) {
         const sub = kegiatan.subKegiatan.find((s) => s.id === selectedRangkaianId);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         allowedDivisi = (sub && (sub as any).divisi) ? (sub as any).divisi : (kegiatan.divisi || []);
       } else {
         allowedDivisi = kegiatan.divisi || [];

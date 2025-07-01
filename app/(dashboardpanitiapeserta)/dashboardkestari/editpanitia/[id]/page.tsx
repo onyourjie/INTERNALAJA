@@ -77,6 +77,7 @@ export default function EditPanitiaPage() {
     if (contextParams.kegiatan_id && contextParams.tanggal && nimFromUrl) {
       fetchPanitiaData()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nimFromUrl, contextParams])
 
   const showLoadingAlert = () => {
@@ -148,6 +149,7 @@ export default function EditPanitiaPage() {
       } else {
         throw new Error(result.message || 'Data tidak ditemukan')
       }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       setError(error.message || 'Gagal memuat data absensi')
       Swal.close()
@@ -288,6 +290,7 @@ export default function EditPanitiaPage() {
       } else {
         throw new Error(result.message || 'Gagal menyimpan perubahan')
       }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('❌ Save error:', error)
       setError(error.message || 'Gagal menyimpan perubahan')

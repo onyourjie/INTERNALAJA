@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client"
 
 import React, { useCallback, useState } from "react"
@@ -6,8 +7,17 @@ import { useRouter } from "next/navigation"
 import Sidebar from "@/components/Sidebar"
 import { useUser } from "@/contexts/UserContext"
 
+// Type definitions
+interface EnhancedProfileAvatarProps {
+  imageUrl?: string
+  name?: string
+  size?: "sm" | "md" | "lg" | "xl"
+  showBorder?: boolean
+  borderColor?: string
+}
+
 // Enhanced ProfileAvatar Component dengan perfect circle
-const EnhancedProfileAvatar = ({ 
+const EnhancedProfileAvatar: React.FC<EnhancedProfileAvatarProps> = ({ 
   imageUrl, 
   name, 
   size = "lg",
@@ -16,27 +26,27 @@ const EnhancedProfileAvatar = ({
 }) => {
   const [imageError, setImageError] = useState(false)
   
-  // Size configurations
-  const sizeClasses = {
+  // Size configurations with proper typing
+  const sizeClasses: Record<string, string> = {
     sm: "w-8 h-8",
     md: "w-10 h-10", 
     lg: "w-12 h-12",
     xl: "w-16 h-16"
   }
   
-  const textSizeClasses = {
+  const textSizeClasses: Record<string, string> = {
     sm: "text-xs",
     md: "text-sm",
     lg: "text-base", 
     xl: "text-xl"
   }
 
-  // Get initials from name
-  const getInitials = (name) => {
+  // Get initials from name with proper typing
+  const getInitials = (name?: string): string => {
     if (!name) return "U"
     return name
       .split(" ")
-      .map(word => word.charAt(0))
+      .map((word: string) => word.charAt(0))
       .join("")
       .substring(0, 2)
       .toUpperCase()
@@ -63,7 +73,8 @@ const EnhancedProfileAvatar = ({
           onError={() => setImageError(true)}
           onLoad={(e) => {
             // Ensure image is properly loaded and centered
-            e.currentTarget.style.objectPosition = "center center"
+            const target = e.currentTarget as HTMLImageElement
+            target.style.objectPosition = "center center"
           }}
         />
       ) : (
@@ -78,11 +89,11 @@ const EnhancedProfileAvatar = ({
   )
 }
 
-export default function PanelLayout({
-  children,
-}: {
+interface PanelLayoutProps {
   children: React.ReactNode
-}) {
+}
+
+export default function PanelLayout({ children }: PanelLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const { userData, loading, error } = useUser()
@@ -227,7 +238,7 @@ export default function PanelLayout({
                 {userData && (
                   <div className="flex items-center gap-3">
                     <EnhancedProfileAvatar 
-                      imageUrl={userData.profile_image}
+                      imageUrl={userData.profile_image ?? undefined}
                       name={userData.nama_lengkap}
                       size="lg"
                       showBorder={true}

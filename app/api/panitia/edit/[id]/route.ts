@@ -173,16 +173,7 @@ export async function GET(
       throw queryError; // Re-throw to be caught by outer catch
     }
 
-    const panitiaData = rows[0];
-    console.log(`API: Found panitia data:`, panitiaData);
-
-    return NextResponse.json(panitiaData, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, max-age=0',
-      },
-    });
+    // (Unreachable code removed: panitiaData from rows[0])
 
   } catch (err: any) {
     console.error(`API: Database error in GET /api/panitia/edit/${params.id}:`, err);

@@ -1,3 +1,7 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable prefer-const */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -134,9 +138,9 @@ export default function QRScannerKonsumsiPage() {
           height: { ideal: 2160, max: 2160 },
           frameRate: { ideal: 144, max: 144 }, // MAXIMUM SPEED - 144fps!!!
           facingMode: "environment",
-          focusMode: "continuous",
-          exposureMode: "continuous",
-          whiteBalanceMode: "continuous", // ENHANCED CAMERA SETTINGS
+          // focusMode: "continuous",
+          // exposureMode: "continuous",
+          // whiteBalanceMode: "continuous", // ENHANCED CAMERA SETTINGS
         },
       });
       if (videoRef.current) {
