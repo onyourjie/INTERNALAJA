@@ -70,7 +70,7 @@ export default function UnauthorizedPage() {
           </Link>
           
           <Link
-            href="/api/auth/signout"
+            href="/"
             className="block w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
           >
             Logout
