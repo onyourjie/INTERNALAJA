@@ -1,9 +1,9 @@
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest, NextResponse } from "next/server";
 import { db, RowDataPacket } from "@/lib/db";
-import QRCode from "qrcode";
 import JSZip from "jszip";
+import { NextRequest, NextResponse } from "next/server";
+import QRCode from "qrcode";
 import sharp from "sharp";
 
 interface PesertaQR extends RowDataPacket {
@@ -51,6 +51,7 @@ interface TextOverlay {
   fontFamily: string;
   strokeWidth: number;
   strokeColor: string;
+  paddingBottom?: number;
 }
 
 interface TemplateSettings {
@@ -64,16 +65,16 @@ interface ProcessingResult {
   errorCount: number;
   errors: string[];
   divisiProcessed: string[];
-  skippedParticipants: string[];
-  fallbackCount: number;
+  textOverlayWarnings?: string[];
+  debugOverlayFiles?: { fileName: string; svg?: Buffer; png?: Buffer }[];
 }
 
-// Enhanced configuration constants
+// Enhanced configuration constants with extended ranges
 const CONFIG = {
-  BATCH_SIZE: 15, // Reduced for better stability
+  BATCH_SIZE: 20, // Reduced due to text rendering overhead
   MAX_QR_LIMIT: 1500,
   MAX_DIVISI_TEMPLATE: 10,
-  PROCESSING_TIMEOUT: 1200000, // 20 minutes
+  PROCESSING_TIMEOUT: 900000, // 15 minutes
   TEMPLATE_MAX_SIZE: 15 * 1024 * 1024, // 15MB
   QR_SETTINGS: {
     DEFAULT_SIZE: 400,
@@ -89,9 +90,10 @@ const CONFIG = {
     MIN: 0.1,
     MAX: 0.8,
   },
+  // EXTENDED: Text settings with massive range support
   TEXT_SETTINGS: {
     MIN_FONT_SIZE: 12,
-    MAX_FONT_SIZE: 1000,
+    MAX_FONT_SIZE: 1000, // Increased from 72 to 1000px
     DEFAULT_FONT_SIZE: 24,
     SUPPORTED_FONTS: [
       "Arial",
@@ -101,17 +103,11 @@ const CONFIG = {
       "Verdana",
       "Georgia",
     ],
+    // Extended positioning limits
     POSITION_LIMITS: {
-      MIN: -10000,
-      MAX: 10000,
+      MIN: -10000, // Extended from -1000 to -10000px
+      MAX: 10000, // Extended from 1000 to 10000px
     },
-  },
-  // FIXED: Canvas limits to prevent memory issues
-  CANVAS_LIMITS: {
-    MAX_WIDTH: 50000,
-    MAX_HEIGHT: 50000,
-    SAFE_WIDTH: 20000,
-    SAFE_HEIGHT: 20000,
   },
 } as const;
 
@@ -138,34 +134,25 @@ function generateChecksum(data: string): string {
   return Math.abs(hash).toString(16);
 }
 
-// FIXED: Enhanced filename sanitization to prevent conflicts
 function sanitizeFilename(name: string): string {
   return name
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
     .replace(/\s+/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "")
-    .substring(0, 100) // Reduced length to prevent issues
+    .substring(0, 150)
     .toLowerCase();
 }
 
-// FIXED: Enhanced filename generation with better uniqueness
 function formatQRFilename(
   peserta: PesertaQR,
   isTemplate: boolean = false,
-  index?: number,
-  additionalSuffix?: string
+  index?: number
 ): string {
   const cleanNama = sanitizeFilename(peserta.nama_lengkap);
-  const cleanNim = sanitizeFilename(peserta.nim);
   const suffix = isTemplate ? "_template" : "";
   const indexSuffix = index !== undefined ? `_${index}` : "";
-  const extraSuffix = additionalSuffix ? `_${additionalSuffix}` : "";
-  
-  // Include unique_id to ensure uniqueness
-  const uniquePart = peserta.unique_id.slice(-6); // Last 6 chars of unique_id
-  
-  return `${cleanNim}_${cleanNama}_${uniquePart}${suffix}${indexSuffix}${extraSuffix}.png`;
+  return `${peserta.nim}_${cleanNama}${suffix}${indexSuffix}.png`;
 }
 
 // Enhanced QR positioning calculator
@@ -227,7 +214,7 @@ function calculateQRPosition(
   return { x: finalX, y: finalY };
 }
 
-// Text positioning calculator
+// NEW: Text positioning calculator
 function calculateTextPosition(
   templateWidth: number,
   templateHeight: number,
@@ -271,7 +258,7 @@ function calculateTextPosition(
   return { x: finalX, y: finalY };
 }
 
-// FIXED: Enhanced validation with better error messages
+// Enhanced validation functions with extended ranges
 function validateTemplateSettings(templateSettings: TemplateSettings): {
   valid: boolean;
   errors: string[];
@@ -307,10 +294,11 @@ function validateTemplateSettings(templateSettings: TemplateSettings): {
     );
   }
 
-  // Enhanced text overlay validation
+  // Enhanced text overlay validation with extended ranges
   if (templateSettings.textOverlay.enabled) {
     const textOverlay = templateSettings.textOverlay;
 
+    // Extended font size validation (12px - 1000px)
     if (
       textOverlay.fontSize < CONFIG.TEXT_SETTINGS.MIN_FONT_SIZE ||
       textOverlay.fontSize > CONFIG.TEXT_SETTINGS.MAX_FONT_SIZE
@@ -320,6 +308,7 @@ function validateTemplateSettings(templateSettings: TemplateSettings): {
       );
     }
 
+    // Extended positioning validation (±10000px)
     if (
       textOverlay.offsetX < CONFIG.TEXT_SETTINGS.POSITION_LIMITS.MIN ||
       textOverlay.offsetX > CONFIG.TEXT_SETTINGS.POSITION_LIMITS.MAX
@@ -351,22 +340,31 @@ function validateTemplateSettings(templateSettings: TemplateSettings): {
 
     // Validate color formats
     const colorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-    if (!colorRegex.test(textOverlay.fontColor)) {
-      errors.push("Invalid font color format. Use hex format (#000000)");
+    if (!(colorRegex.test(textOverlay.fontColor) || textOverlay.fontColor === 'transparent')) {
+      errors.push("Invalid font color format. Use hex format (#000000) or 'transparent'");
     }
 
-    if (!colorRegex.test(textOverlay.backgroundColor)) {
-      errors.push("Invalid background color format. Use hex format (#FFFFFF)");
+    if (!(colorRegex.test(textOverlay.backgroundColor) || textOverlay.backgroundColor === 'transparent')) {
+      errors.push("Invalid background color format. Use hex format (#FFFFFF) or 'transparent'");
     }
 
     // Font family validation
+    const supportedFonts = ["Arial", "Helvetica", "Times New Roman", "Courier New", "Verdana", "Georgia"];
+    const fontFamily = supportedFonts.includes(textOverlay.fontFamily) ? textOverlay.fontFamily : "Arial";
+
+    // Add warnings for extreme values (not errors, just logs)
+    if (textOverlay.fontSize > 500) {
+      console.warn(
+        `Large font size detected: ${textOverlay.fontSize}px - this may cause performance issues`
+      );
+    }
+
     if (
-      !CONFIG.TEXT_SETTINGS.SUPPORTED_FONTS.includes(textOverlay.fontFamily)
+      Math.abs(textOverlay.offsetX) > 5000 ||
+      Math.abs(textOverlay.offsetY) > 5000
     ) {
-      errors.push(
-        `Font family must be one of: ${CONFIG.TEXT_SETTINGS.SUPPORTED_FONTS.join(
-          ", "
-        )}`
+      console.warn(
+        `Extreme positioning detected: X:${textOverlay.offsetX}px, Y:${textOverlay.offsetY}px - canvas will be extended`
       );
     }
   }
@@ -374,145 +372,207 @@ function validateTemplateSettings(templateSettings: TemplateSettings): {
   return { valid: errors.length === 0, errors };
 }
 
-// FIXED: Enhanced text validation function
-function validateTextContent(text: string): { valid: boolean; sanitized: string; errors: string[] } {
-  const errors: string[] = [];
-  let sanitized = text;
-
-  if (!text || text.trim().length === 0) {
-    errors.push("Text content cannot be empty");
-    return { valid: false, sanitized: "", errors };
-  }
-
-  // Remove problematic characters that could break SVG
-  sanitized = text
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
-    .replace(/[<>&"']/g, (char) => { // Escape XML characters
-      switch (char) {
-        case '<': return '&lt;';
-        case '>': return '&gt;';
-        case '&': return '&amp;';
-        case '"': return '&quot;';
-        case "'": return '&#39;';
-        default: return char;
-      }
-    })
-    .trim();
-
-  if (sanitized.length === 0) {
-    errors.push("Text content becomes empty after sanitization");
-    return { valid: false, sanitized: "", errors };
-  }
-
-  if (sanitized.length > 100) {
-    sanitized = sanitized.substring(0, 100) + "...";
-  }
-
-  return { valid: true, sanitized, errors };
+// Tambahkan fungsi utilitas untuk warna kontras
+function getContrastColor(hex: string): string {
+  // Ambil RGB
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  // Luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? '#000000' : '#FFFFFF';
 }
 
-// FIXED: Enhanced text overlay SVG creation with better error handling
+// Enhanced text overlay SVG creation with support for large fonts
 async function createTextOverlaySVG(
   text: string,
   textOverlay: TextOverlay,
   templateWidth: number
 ): Promise<Buffer> {
-  try {
-    // Validate and sanitize text
-    const textValidation = validateTextContent(text);
-    if (!textValidation.valid) {
-      throw new Error(`Invalid text content: ${textValidation.errors.join(', ')}`);
-    }
-    
-    const sanitizedText = textValidation.sanitized;
-    const fontSize = Math.max(12, Math.min(1000, textOverlay.fontSize));
-    const fontFamily = textOverlay.fontFamily;
-    const fontWeight = textOverlay.fontWeight;
-    const fontColor = textOverlay.fontColor;
-    const backgroundColor = textOverlay.backgroundColor;
-    const padding = Math.max(0, Math.min(50, textOverlay.padding));
-    const borderRadius = Math.max(0, Math.min(50, textOverlay.borderRadius));
-
-    // Enhanced text dimension calculation
-    let charWidth = fontSize * 0.6;
-    let textWidth = Math.max(sanitizedText.length * charWidth, 100);
-    let textHeight = fontSize * 1.2;
-
-    // Adjustments for large fonts
-    if (fontSize > 200) {
-      charWidth = fontSize * 0.55;
-      textWidth = sanitizedText.length * charWidth;
-      textHeight = fontSize * 1.15;
-    }
-
-    if (fontSize > 500) {
-      charWidth = fontSize * 0.5;
-      textWidth = sanitizedText.length * charWidth;
-      textHeight = fontSize * 1.1;
-    }
-
-    // Ensure minimum dimensions
-    textWidth = Math.max(textWidth, fontSize * 2);
-    textHeight = Math.max(textHeight, fontSize);
-
-    // Create background rect dimensions
-    const paddingMultiplier = fontSize > 200 ? Math.max(1, fontSize / 200) : 1;
-    const adjustedPadding = padding * paddingMultiplier;
-
-    const bgWidth = Math.min(textWidth + adjustedPadding * 2, CONFIG.CANVAS_LIMITS.SAFE_WIDTH);
-    const bgHeight = Math.min(textHeight + adjustedPadding * 2, CONFIG.CANVAS_LIMITS.SAFE_HEIGHT);
-
-    // Convert background color to RGBA
-    const bgR = parseInt(backgroundColor.slice(1, 3), 16);
-    const bgG = parseInt(backgroundColor.slice(3, 5), 16);
-    const bgB = parseInt(backgroundColor.slice(5, 7), 16);
-    const bgOpacity = Math.max(0, Math.min(1, textOverlay.backgroundOpacity));
-
-    // Enhanced SVG with better error handling
-    const svg = `
-      <svg width="${bgWidth}" height="${bgHeight}" xmlns="http://www.w3.org/2000/svg">
-        <rect 
-          x="0" y="0" 
-          width="${bgWidth}" 
-          height="${bgHeight}" 
-          rx="${borderRadius * paddingMultiplier}" 
-          ry="${borderRadius * paddingMultiplier}"
-          fill="rgba(${bgR}, ${bgG}, ${bgB}, ${bgOpacity})"
-        />
-        <text 
-          x="${bgWidth / 2}" 
-          y="${bgHeight / 2 + fontSize / 3}" 
-          font-family="${fontFamily}" 
-          font-size="${fontSize}" 
-          font-weight="${fontWeight}" 
-          fill="${fontColor}" 
-          text-anchor="middle" 
-          dominant-baseline="middle"
-          letter-spacing="${fontSize > 100 ? fontSize * 0.02 : 0}"
-        >${sanitizedText}</text>
-      </svg>
-    `;
-
-    console.log(
-      `Created text overlay: "${sanitizedText}" with font ${fontSize}px, dimensions ${bgWidth}x${bgHeight}`
-    );
-    return Buffer.from(svg);
-  } catch (error) {
-    console.error('Error creating text overlay SVG:', error);
-    throw new Error(`Text overlay creation failed: ${error.message}`);
+  let fontColor = textOverlay.fontColor;
+  let backgroundColor = textOverlay.backgroundColor;
+  let backgroundOpacity = textOverlay.backgroundOpacity;
+  if (fontColor.toLowerCase() === backgroundColor.toLowerCase()) {
+    fontColor = getContrastColor(backgroundColor);
   }
+  if (backgroundColor === 'transparent' || backgroundOpacity === 0) {
+    backgroundColor = 'none';
+    backgroundOpacity = 0;
+  }
+  let fontSize = textOverlay.fontSize;
+  const fontFamily = textOverlay.fontFamily;
+  const fontWeight = textOverlay.fontWeight;
+  const padding = textOverlay.padding;
+  const borderRadius = textOverlay.borderRadius;
+  const paddingBottom = typeof textOverlay.paddingBottom === 'number' ? textOverlay.paddingBottom : padding;
+
+  // PATCH: Auto-scale font size jika text terlalu panjang
+  let charWidth = fontSize * 0.6;
+  let textWidth = Math.max(text.length * charWidth, 100);
+  let textHeight = fontSize * 1.2;
+  let scaled = false;
+  let minFontSize = 12;
+  let warning = '';
+  while (textWidth + padding * 2 > templateWidth && fontSize > minFontSize) {
+    fontSize = Math.max(minFontSize, fontSize - 2);
+    charWidth = fontSize * 0.6;
+    textWidth = Math.max(text.length * charWidth, 100);
+    textHeight = fontSize * 1.2;
+    scaled = true;
+  }
+  if (scaled && fontSize === minFontSize) {
+    warning = 'Font terlalu kecil akibat nama terlalu panjang, hasil overlay mungkin kurang jelas.';
+  } else if (scaled) {
+    warning = 'Font otomatis diskalakan agar muat di template.';
+  }
+  if (fontSize > 200) {
+    charWidth = fontSize * 0.55;
+    textWidth = text.length * charWidth;
+    textHeight = fontSize * 1.15;
+  }
+  if (fontSize > 500) {
+    charWidth = fontSize * 0.5;
+    textWidth = text.length * charWidth;
+    textHeight = fontSize * 1.1;
+  }
+  textWidth = Math.max(textWidth, fontSize * 2);
+  textHeight = Math.max(textHeight, fontSize);
+  const paddingMultiplier = fontSize > 200 ? Math.max(1, fontSize / 200) : 1;
+  const adjustedPadding = padding * paddingMultiplier;
+  const adjustedPaddingBottom = paddingBottom * paddingMultiplier;
+  const bgWidth = textWidth + adjustedPadding * 2;
+  const bgHeight = textHeight + adjustedPadding + adjustedPaddingBottom;
+
+  // PATCH: posisi Y text di SVG harus memperhitungkan padding bawah
+  const textY = adjustedPadding + textHeight / 2 + (adjustedPaddingBottom - adjustedPadding) / 2;
+
+  const svg = `
+    <svg width="${bgWidth}" height="${bgHeight}" xmlns="http://www.w3.org/2000/svg">
+      <rect 
+        x="0" y="0" 
+        width="${bgWidth}" 
+        height="${bgHeight}" 
+        rx="${borderRadius * paddingMultiplier}" 
+        ry="${borderRadius * paddingMultiplier}"
+        fill="${backgroundColor}"
+        fill-opacity="${backgroundOpacity}"
+      />
+      <text 
+        x="${bgWidth / 2}" 
+        y="${textY}" 
+        font-family="${fontFamily}" 
+        font-size="${fontSize}" 
+        font-weight="${fontWeight}" 
+        fill="${fontColor}" 
+        text-anchor="middle" 
+        dominant-baseline="middle"
+        letter-spacing="${fontSize > 100 ? fontSize * 0.02 : 0}"
+      >${text}</text>
+    </svg>
+  `;
+  if (warning && (globalThis as any).textOverlayWarnings) {
+    (globalThis as any).textOverlayWarnings.push(warning + ' | Peserta: ' + text);
+  }
+  console.log(
+    `Created text overlay: "${text}" with font ${fontSize}px, dimensions ${bgWidth}x${bgHeight}`
+  );
+  return Buffer.from(svg);
 }
 
-// FIXED: Enhanced template processing with comprehensive error handling
+// Koreksi posisi text overlay agar tidak keluar template dan tidak overlap QR code (preset center)
+function clampTextOverlayBackend(
+  textOverlay: TextOverlay,
+  templateWidth: number,
+  templateHeight: number,
+  textWidth: number,
+  textHeight: number,
+  qrPos?: { x: number; y: number; size: number }
+): { offsetX: number; offsetY: number; corrected: boolean; warning?: string } {
+  let offsetX = textOverlay.offsetX;
+  let offsetY = textOverlay.offsetY;
+  let corrected = false;
+  let warning = undefined;
+
+  // Koreksi offsetY
+  if (offsetY + textHeight > templateHeight) {
+    offsetY = Math.max(0, templateHeight - textHeight);
+    corrected = true;
+    warning = 'Text overlay Y dikoreksi agar tidak keluar template';
+  }
+  if (offsetY < 0) {
+    offsetY = 0;
+    corrected = true;
+    warning = 'Text overlay Y dikoreksi agar tidak keluar template';
+  }
+  // Koreksi offsetX (center align)
+  if (textOverlay.textAlign === 'center') {
+    if (offsetX - textWidth / 2 < 0) {
+      offsetX = textWidth / 2;
+      corrected = true;
+      warning = 'Text overlay X dikoreksi agar tidak keluar template';
+    }
+    if (offsetX + textWidth / 2 > templateWidth) {
+      offsetX = templateWidth - textWidth / 2;
+      corrected = true;
+      warning = 'Text overlay X dikoreksi agar tidak keluar template';
+    }
+  } else {
+    if (offsetX + textWidth > templateWidth) {
+      offsetX = templateWidth - textWidth;
+      corrected = true;
+      warning = 'Text overlay X dikoreksi agar tidak keluar template';
+    }
+    if (offsetX < 0) {
+      offsetX = 0;
+      corrected = true;
+      warning = 'Text overlay X dikoreksi agar tidak keluar template';
+    }
+  }
+  // Jika preset center dan ada QR code, pastikan tidak overlap
+  if (qrPos && textOverlay.preset === 'center') {
+    const textBox = {
+      left: offsetX - textWidth / 2,
+      right: offsetX + textWidth / 2,
+      top: offsetY,
+      bottom: offsetY + textHeight,
+    };
+    const qrBox = {
+      left: qrPos.x,
+      right: qrPos.x + qrPos.size,
+      top: qrPos.y,
+      bottom: qrPos.y + qrPos.size,
+    };
+    // Jika overlap secara vertikal, geser text ke atas/bawah QR
+    if (
+      textBox.right > qrBox.left &&
+      textBox.left < qrBox.right &&
+      textBox.bottom > qrBox.top &&
+      textBox.top < qrBox.bottom
+    ) {
+      // Geser text ke atas QR jika cukup ruang, jika tidak ke bawah
+      if (qrBox.top - textHeight > 0) {
+        offsetY = qrBox.top - textHeight - 10;
+        corrected = true;
+        warning = 'Text overlay digeser agar tidak overlap QR code';
+      } else if (qrBox.bottom + textHeight < templateHeight) {
+        offsetY = qrBox.bottom + 10;
+        corrected = true;
+        warning = 'Text overlay digeser agar tidak overlap QR code';
+      }
+    }
+  }
+  return { offsetX, offsetY, corrected, warning };
+}
+
+// Enhanced template processing with text overlay
 async function applyQRAndTextToTemplate(
   templateBuffer: Buffer,
   qrData: string,
   templateSettings: TemplateSettings,
   pesertaNama: string,
   qrSettings: any = {},
-  retryCount: number = 0,
-  participantId: string = "unknown"
-): Promise<Buffer> {
+  retryCount: number = 0
+): Promise<{ buffer: Buffer; debugSVG?: Buffer; debugPNG?: Buffer; textOverlayWarning?: string }> {
   const MAX_RETRIES = 2;
 
   let qrBuffer: Buffer | null = null;
@@ -524,14 +584,8 @@ async function applyQRAndTextToTemplate(
       throw new Error("Invalid template buffer");
     }
 
-    // FIXED: Validate participant name early
-    if (!pesertaNama || pesertaNama.trim().length === 0) {
-      console.warn(`Empty name for participant ${participantId}, using fallback`);
-      pesertaNama = participantId || "Unknown Participant";
-    }
-
-    // Generate QR code with timeout
-    const qrPromise = QRCode.toBuffer(qrData, {
+    // Generate QR code
+    qrBuffer = await QRCode.toBuffer(qrData, {
       type: "png",
       width: qrSettings.qr_size || CONFIG.QR_SETTINGS.DEFAULT_SIZE,
       margin: qrSettings.margin || CONFIG.QR_SETTINGS.DEFAULT_MARGIN,
@@ -543,13 +597,7 @@ async function applyQRAndTextToTemplate(
         qrSettings.error_correction || CONFIG.QR_SETTINGS.ERROR_CORRECTION,
     });
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("QR generation timeout")), 30000)
-    );
-
-    qrBuffer = await Promise.race([qrPromise, timeoutPromise]);
-
-    // Get template metadata with validation
+    // Get template metadata
     let templateMetadata;
     try {
       templateMetadata = await sharp(templateBuffer).metadata();
@@ -560,14 +608,8 @@ async function applyQRAndTextToTemplate(
     const templateWidth = templateMetadata.width || 720;
     const templateHeight = templateMetadata.height || 1280;
 
-    if (templateWidth < 100 || templateHeight < 100) {
-      throw new Error("Template too small (minimum 100x100px)");
-    }
-
-    // FIXED: Validate canvas size limits
-    if (templateWidth > CONFIG.CANVAS_LIMITS.MAX_WIDTH || 
-        templateHeight > CONFIG.CANVAS_LIMITS.MAX_HEIGHT) {
-      throw new Error(`Template too large (max ${CONFIG.CANVAS_LIMITS.MAX_WIDTH}x${CONFIG.CANVAS_LIMITS.MAX_HEIGHT}px)`);
+    if (templateWidth < 400 || templateHeight < 400) {
+      throw new Error("Template too small (minimum 400x400px)");
     }
 
     // Calculate QR size and position
@@ -597,113 +639,94 @@ async function applyQRAndTextToTemplate(
     const compositeOptions: any[] = [
       {
         input: resizedQR,
-        top: qrPos.y,
-        left: qrPos.x,
+        top: Math.round(qrPos.y),
+        left: Math.round(qrPos.x),
         blend: "over",
       },
     ];
 
-    // FIXED: Add text overlay with comprehensive error handling
-    if (templateSettings.textOverlay.enabled && pesertaNama) {
+    // Add text overlay if enabled
+    let textOverlayWasComposited = false;
+    if (templateSettings.textOverlay.enabled) {
+      let pesertaNamaFinal = pesertaNama && pesertaNama.trim() ? pesertaNama : 'NAMA TIDAK TERSEDIA';
       try {
-        // Create text overlay SVG with validation
+        console.log('[DEBUG] Nama peserta untuk text overlay:', pesertaNamaFinal);
+        // Create text overlay SVG
         textOverlayBuffer = await createTextOverlaySVG(
-          pesertaNama,
+          pesertaNamaFinal,
           templateSettings.textOverlay,
           templateWidth
         );
-
-        // Convert SVG to PNG with timeout
-        const textPngPromise = sharp(textOverlayBuffer).png().toBuffer();
-        const textTimeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Text rendering timeout")), 30000)
-        );
-
-        const textPngBuffer = await Promise.race([textPngPromise, textTimeoutPromise]);
-
+        if (!textOverlayBuffer || textOverlayBuffer.length < 100) {
+          console.warn('[WARNING] Text overlay SVG buffer kosong atau terlalu kecil!');
+          if ((globalThis as any).textOverlayWarnings) {
+            (globalThis as any).textOverlayWarnings.push('Text overlay SVG buffer kosong untuk peserta: ' + pesertaNamaFinal);
+          }
+          // Skip penempelan text overlay jika buffer kosong
+        } else {
+        const textPngBuffer = await sharp(textOverlayBuffer).png().toBuffer();
         // Get text overlay dimensions
         const textMetadata = await sharp(textPngBuffer).metadata();
-        const textWidth = textMetadata.width || 100;
-        const textHeight = textMetadata.height || 50;
-
+          let textWidth = textMetadata.width || 100;
+          let textHeight = textMetadata.height || 50;
+          // Koreksi posisi agar tidak keluar template dan tidak overlap QR
+          const safePos = clampTextOverlayBackend(
+            templateSettings.textOverlay,
+            templateWidth,
+            templateHeight,
+            textWidth,
+            textHeight,
+            { x: qrPos.x, y: qrPos.y, size: qrSize }
+          );
         // Calculate text position
-        const textPos = calculateTextPosition(
+          let textPos = calculateTextPosition(
           templateWidth,
           templateHeight,
-          templateSettings.textOverlay,
+            { ...templateSettings.textOverlay, offsetX: safePos.offsetX, offsetY: safePos.offsetY },
           textWidth,
           textHeight
         );
-
-        // Add text overlay to composite options
+          // PAKSA posisi agar selalu di dalam template (sinkron dengan frontend)
+          if (templateSettings.textOverlay.textAlign === 'center') {
+            textPos.x = textPos.x - textWidth / 2;
+          } else if (templateSettings.textOverlay.textAlign === 'right') {
+            textPos.x = textPos.x - textWidth;
+          }
+          // Clamp agar tidak keluar template
+          textPos.x = Math.max(0, Math.min(textPos.x, templateWidth - textWidth));
+          textPos.y = Math.max(0, Math.min(textPos.y, templateHeight - textHeight));
+          // Selalu composite overlay (hilangkan validasi textInTemplate)
         compositeOptions.push({
           input: textPngBuffer,
-          top: textPos.y,
-          left: textPos.x,
+            top: Math.round(textPos.y),
+            left: Math.round(textPos.x),
           blend: "over",
         });
-
-        console.log(
-          `Text overlay applied for ${participantId}: "${pesertaNama}" at position (${textPos.x}, ${textPos.y})`
-        );
+          textOverlayWasComposited = true;
+        }
       } catch (textError) {
-        console.error(`Error creating text overlay for ${participantId}:`, textError);
-        // Continue without text overlay instead of failing completely
-        console.log(`Proceeding without text overlay for ${participantId}`);
+        console.error("Error creating text overlay:", textError);
+        let errorMsg = '';
+        if (textError instanceof Error) {
+          errorMsg = textError.message;
+        } else if (typeof textError === 'string') {
+          errorMsg = textError;
+        } else {
+          errorMsg = JSON.stringify(textError);
+        }
+        (globalThis as any).textOverlayWarnings.push('Gagal membuat text overlay untuk peserta: ' + pesertaNamaFinal + ' | Error: ' + errorMsg);
+        // Continue without text overlay if there's an error
+      }
+      // Fallback warning jika text overlay tidak pernah ditempel
+      if (!textOverlayWasComposited) {
+        if ((globalThis as any).textOverlayWarnings) {
+          (globalThis as any).textOverlayWarnings.push('Text overlay tidak ditempel untuk peserta: ' + pesertaNamaFinal + ' karena alasan tidak diketahui.');
+        }
       }
     }
 
-    // FIXED: Enhanced canvas size calculation with limits
-    const canvasWidth = Math.min(
-      Math.max(
-        templateWidth,
-        qrPos.x + qrSize + 100,
-        templateSettings.textOverlay.enabled
-          ? Math.abs(templateSettings.textOverlay.offsetX) + 2000
-          : 0
-      ),
-      CONFIG.CANVAS_LIMITS.SAFE_WIDTH
-    );
-
-    const canvasHeight = Math.min(
-      Math.max(
-        templateHeight,
-        qrPos.y + qrSize + 100,
-        templateSettings.textOverlay.enabled
-          ? Math.abs(templateSettings.textOverlay.offsetY) + 1000
-          : 0
-      ),
-      CONFIG.CANVAS_LIMITS.SAFE_HEIGHT
-    );
-
-    let result: Buffer;
-
-    // Enhanced canvas extension logic with limits
-    if (canvasWidth > templateWidth || canvasHeight > templateHeight) {
-      console.log(
-        `Extended canvas for ${participantId}: ${canvasWidth}x${canvasHeight} (original: ${templateWidth}x${templateHeight})`
-      );
-
-      result = await sharp({
-        create: {
-          width: canvasWidth,
-          height: canvasHeight,
-          channels: 4,
-          background: { r: 255, g: 255, b: 255, alpha: 1 },
-        },
-      })
-        .composite([
-          { input: templateBuffer, top: 0, left: 0 },
-          ...compositeOptions,
-        ])
-        .png({
-          compressionLevel: CONFIG.QR_SETTINGS.COMPRESSION_LEVEL,
-          adaptiveFiltering: true,
-          force: true,
-        })
-        .toBuffer();
-    } else {
       // Standard processing within template bounds
+    let result: Buffer;
       result = await sharp(templateBuffer)
         .composite(compositeOptions)
         .png({
@@ -712,12 +735,16 @@ async function applyQRAndTextToTemplate(
           force: true,
         })
         .toBuffer();
-    }
 
-    return result;
+    return {
+      buffer: result,
+      debugSVG: textOverlayBuffer || undefined,
+      debugPNG: resizedQR || undefined,
+      textOverlayWarning: textOverlayWasComposited ? undefined : 'Text overlay tidak ditempel untuk peserta: ' + pesertaNama,
+    };
   } catch (error: any) {
     console.error(
-      `Template processing error for ${participantId} (attempt ${retryCount + 1}):`,
+      `Template processing error (attempt ${retryCount + 1}):`,
       error?.message || error
     );
 
@@ -729,13 +756,12 @@ async function applyQRAndTextToTemplate(
         templateSettings,
         pesertaNama,
         qrSettings,
-        retryCount + 1,
-        participantId
+        retryCount + 1
       );
     }
 
     throw new Error(
-      `Template processing failed for ${participantId}: ${error?.message || "Unknown error"}`
+      `Template processing failed: ${error?.message || "Unknown error"}`
     );
   } finally {
     qrBuffer = null;
@@ -748,7 +774,7 @@ async function applyQRAndTextToTemplate(
   }
 }
 
-// FIXED: Enhanced batch processor with better error handling and tracking
+// Enhanced batch processor with text overlay support
 async function processBatchQRTemplateWithText(
   rows: PesertaQR[],
   templateBuffer: Buffer,
@@ -765,10 +791,10 @@ async function processBatchQRTemplateWithText(
     {};
   let processedCount = 0;
   let errorCount = 0;
-  let fallbackCount = 0;
   const errors: string[] = [];
   const divisiProcessed: string[] = [];
-  const skippedParticipants: string[] = [];
+  const textOverlayWarnings: string[] = [];
+  const debugOverlayFiles: { fileName: string; svg?: Buffer; png?: Buffer }[] = [];
 
   // Validate inputs
   if (!rows.length) {
@@ -817,7 +843,7 @@ async function processBatchQRTemplateWithText(
   progressCallback?.(
     0,
     filteredRows.length,
-    `Initializing enhanced processing with ${processingDesc}...`
+    `Initializing per-divisi processing with ${processingDesc}...`
   );
 
   // Group rows by divisi
@@ -836,17 +862,14 @@ async function processBatchQRTemplateWithText(
     progressCallback?.(
       totalProcessed,
       filteredRows.length,
-      `Processing divisi: ${divisiName} with enhanced error handling`,
+      `Processing divisi: ${divisiName} with text overlay`,
       divisiName
     );
 
     const sanitizedDivisiName = sanitizeFilename(divisiName);
     divisiData[sanitizedDivisiName] = [];
 
-    // FIXED: Track filenames to prevent duplicates
-    const usedFilenames = new Set<string>();
-
-    // Process divisi in smaller batches
+    // Process divisi in smaller batches due to text rendering overhead
     const totalBatches = Math.ceil(divisiRows.length / CONFIG.BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -862,183 +885,117 @@ async function processBatchQRTemplateWithText(
         filteredRows.length,
         `Processing ${divisiName} - batch ${
           batchIndex + 1
-        }/${totalBatches} with comprehensive error handling`,
+        }/${totalBatches} with text rendering`,
         divisiName
       );
 
-      // FIXED: Process batch with individual error handling
-      const batchResults = await Promise.allSettled(
-        batch.map(async (peserta, index) => {
-          try {
-            // Validate participant data
-            if (!peserta.unique_id || !peserta.nim) {
-              throw new Error("Missing required participant data");
-            }
+      const batchPromises = batch.map(async (peserta, index) => {
+        try {
+          const qrData = generateQRData(peserta);
 
-            let participantName = peserta.nama_lengkap;
-            if (!participantName || participantName.trim().length === 0) {
-              console.warn(`Empty name for ${peserta.unique_id}, using fallback`);
-              participantName = peserta.nim || peserta.unique_id || "Unknown";
-            }
-
-            const qrData = generateQRData(peserta);
-
-            // Apply template with enhanced error handling
-            const processedImageBuffer = await Promise.race([
-              applyQRAndTextToTemplate(
-                templateBuffer,
-                qrData,
-                templateSettings,
-                participantName,
-                {
-                  qr_size: 400,
-                  margin: 2,
-                  dark_color: "#000000",
-                  light_color: "#FFFFFF",
-                  error_correction: "M",
-                },
-                0,
-                peserta.unique_id
-              ),
-              new Promise<never>(
-                (_, reject) =>
-                  setTimeout(() => reject(new Error("Processing timeout")), 60000)
-              ),
-            ]);
-
-            // FIXED: Generate unique filename
-            let fileName = formatQRFilename(peserta, true);
-            let fileIndex = 0;
-            
-            while (usedFilenames.has(fileName)) {
-              fileName = formatQRFilename(peserta, true, fileIndex, `retry`);
-              fileIndex++;
-              if (fileIndex > 100) {
-                throw new Error("Could not generate unique filename");
-              }
-            }
-            
-            usedFilenames.add(fileName);
-
-            return {
-              success: true,
-              data: {
-                fileName,
-                buffer: processedImageBuffer,
-                participantId: peserta.unique_id,
-                participantName: participantName
-              }
-            };
-
-          } catch (error: any) {
-            console.error(
-              `Error processing template for ${peserta.unique_id}:`,
-              error?.message || error
-            );
-            
-            return {
-              success: false,
-              error: error?.message || "Unknown error",
-              participantId: peserta.unique_id,
-              participantName: peserta.nama_lengkap || peserta.unique_id
-            };
-          }
-        })
-      );
-
-      // FIXED: Process results with fallback handling
-      for (const result of batchResults) {
-        if (result.status === 'fulfilled' && result.value.success) {
-          // Success case
-          divisiData[sanitizedDivisiName].push({
-            fileName: result.value.data.fileName,
-            buffer: result.value.data.buffer
-          });
-          processedCount++;
-          
-        } else {
-          // Error case - attempt fallback
-          const errorInfo = result.status === 'fulfilled' 
-            ? result.value 
-            : { 
-                participantId: 'unknown', 
-                participantName: 'unknown',
-                error: result.reason?.message || 'Promise rejected' 
-              };
-
-          const participantId = errorInfo.participantId;
-          const participantName = errorInfo.participantName;
-          const errorMsg = `${participantId} (${divisiName}): ${errorInfo.error}`;
-          
-          console.error(`Primary processing failed for ${participantId}, attempting fallback`);
-          errors.push(errorMsg);
-
-          // FIXED: Comprehensive fallback to simple QR
-          try {
-            const peserta = batch.find(p => p.unique_id === participantId);
-            if (peserta) {
-              const qrData = generateQRData(peserta);
-              const qrBuffer = await QRCode.toBuffer(qrData, {
-                type: "png",
-                width: 300,
+          // Apply both QR and text overlay
+          const processedImageResult = await Promise.race([
+            applyQRAndTextToTemplate(
+              templateBuffer,
+              qrData,
+              templateSettings,
+              peserta.nama_lengkap, // Use nama_lengkap for text overlay
+              {
+                qr_size: 400,
                 margin: 2,
-                color: { dark: "#000000", light: "#FFFFFF" },
-                errorCorrectionLevel: "M",
-              });
-
-              // Generate fallback filename
-              let fallbackFileName = formatQRFilename(peserta, false, undefined, "fallback");
-              let fallbackIndex = 0;
-              
-              while (usedFilenames.has(fallbackFileName)) {
-                fallbackFileName = formatQRFilename(peserta, false, fallbackIndex, "fallback");
-                fallbackIndex++;
+                dark_color: "#000000",
+                light_color: "#FFFFFF",
+                error_correction: "M",
               }
-              
-              usedFilenames.add(fallbackFileName);
+            ),
+            new Promise<never>(
+              (_, reject) =>
+                setTimeout(() => reject(new Error("Processing timeout")), 40000) // Increased timeout for text rendering
+            ),
+          ]);
 
-              divisiData[sanitizedDivisiName].push({
-                fileName: fallbackFileName,
-                buffer: qrBuffer,
-              });
+          let fileName = formatQRFilename(peserta, true);
+          let fileIndex = 0;
+          while (
+            divisiData[sanitizedDivisiName].some((f) => f.fileName === fileName)
+          ) {
+            fileName = formatQRFilename(peserta, true, ++fileIndex);
+          }
 
-              processedCount++;
-              fallbackCount++;
-              console.log(`Fallback QR created successfully for ${participantId}`);
-              
-            } else {
-              console.error(`Could not find participant data for ${participantId}`);
-              skippedParticipants.push(participantId);
-              errorCount++;
-            }
+          divisiData[sanitizedDivisiName].push({
+            fileName,
+            buffer: processedImageResult.buffer,
+          });
+
+          if (processedImageResult.debugSVG) {
+            debugOverlayFiles.push({
+              fileName: fileName + '.svg',
+              svg: processedImageResult.debugSVG,
+            });
+          }
+          if (processedImageResult.debugPNG) {
+            debugOverlayFiles.push({
+              fileName: fileName + '.png',
+              png: processedImageResult.debugPNG,
+            });
+          }
+
+          if (processedImageResult.textOverlayWarning) {
+            textOverlayWarnings.push(processedImageResult.textOverlayWarning);
+          }
+
+          processedCount++;
+        } catch (error: any) {
+          const errorMsg = `${peserta.unique_id} (${divisiName}): ${
+            error?.message || "Unknown error"
+          }`;
+          console.error(
+            `Error processing template+text for ${peserta.unique_id}:`,
+            error?.message || error
+          );
+          errors.push(errorMsg);
+          errorCount++;
+
+          // Fallback to original QR without text
+          try {
+            const qrData = generateQRData(peserta);
+            const qrBuffer = await QRCode.toBuffer(qrData, {
+              type: "png",
+              width: 300,
+              margin: 2,
+              color: { dark: "#000000", light: "#FFFFFF" },
+              errorCorrectionLevel: "M",
+            });
+
+            const fileName = formatQRFilename(peserta, false);
+            divisiData[sanitizedDivisiName].push({
+              fileName,
+              buffer: qrBuffer,
+            });
+
+            processedCount++;
           } catch (fallbackError) {
             console.error(
-              `Fallback also failed for ${participantId}:`,
+              `Fallback failed for ${peserta.unique_id}:`,
               fallbackError
             );
             errors.push(
-              `${participantId} (${divisiName}): Both primary and fallback processing failed`
+              `${peserta.unique_id} (${divisiName}): Fallback also failed`
             );
-            skippedParticipants.push(participantId);
-            errorCount++;
           }
         }
-      }
+      });
+
+      await Promise.allSettled(batchPromises);
 
       // Update progress
       totalProcessed += batch.length;
       progressCallback?.(
         totalProcessed,
         filteredRows.length,
-        `Completed ${divisiName} - batch ${batchIndex + 1}/${totalBatches} (${processedCount} processed, ${errorCount} failed)`,
+        `Completed ${divisiName} - batch ${batchIndex + 1}/${totalBatches}`,
         divisiName
       );
-
-      // Memory cleanup between batches
-      if (batchIndex % 3 === 0 && global.gc) {
-        global.gc();
-        await delay(200);
-      }
     }
 
     divisiProcessed.push(divisiName);
@@ -1053,22 +1010,22 @@ async function processBatchQRTemplateWithText(
   progressCallback?.(
     filteredRows.length,
     filteredRows.length,
-    `Enhanced template processing completed: ${processedCount} processed, ${fallbackCount} fallbacks, ${errorCount} failed`
+    `Template processing with text overlay completed`
   );
 
-  return { 
-    divisiData, 
-    processedCount, 
-    errorCount, 
-    errors, 
+  return {
+    divisiData,
+    processedCount,
+    errorCount,
+    errors,
     divisiProcessed,
-    skippedParticipants,
-    fallbackCount
+    textOverlayWarnings,
+    debugOverlayFiles,
   };
 }
 
 function isRetryableError(error: any): boolean {
-  const retryableMessages = ["timeout", "memory", "ECONNRESET", "ETIMEDOUT", "ENOMEM"];
+  const retryableMessages = ["timeout", "memory", "ECONNRESET", "ETIMEDOUT"];
   return retryableMessages.some(
     (msg) =>
       error?.message?.toLowerCase().includes(msg) || error?.code?.includes(msg)
@@ -1183,7 +1140,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Bulk QR download
+    // Bulk QR download (original QR only)
     else if (type === "bulk") {
       let query =
         'SELECT * FROM panitia_peserta WHERE qr_code IS NOT NULL AND qr_code != ""';
@@ -1318,7 +1275,7 @@ export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get("content-type");
 
-    // Enhanced template processing with comprehensive error handling
+    // Enhanced template processing with text overlay
     if (contentType?.includes("multipart/form-data")) {
       const formData = await request.formData();
       const templateFile = formData.get("template") as File;
@@ -1353,7 +1310,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Parse template settings
+      // Parse template settings (enhanced with text overlay)
       let templateSettings: TemplateSettings;
       try {
         templateSettings = templateSettingsStr
@@ -1479,7 +1436,7 @@ export async function POST(request: NextRequest) {
         processingType: processingDesc,
       });
 
-      // Use enhanced batch processor
+      // Use enhanced batch processor with text overlay
       const result = await processBatchQRTemplateWithText(
         rows,
         templateBuffer,
@@ -1504,8 +1461,6 @@ export async function POST(request: NextRequest) {
           {
             success: false,
             message: "Gagal memproses template QR dengan text overlay",
-            errors: result.errors,
-            skipped_participants: result.skippedParticipants,
           },
           { status: 500 }
         );
@@ -1525,12 +1480,19 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Tambahkan folder _debug_overlay dan masukkan semua file debugOverlayFiles
+      if (result.debugOverlayFiles && result.debugOverlayFiles.length > 0) {
+        const debugFolder = zip.folder('_debug_overlay');
+        for (const debug of result.debugOverlayFiles) {
+          if (debug.svg) debugFolder?.file(debug.fileName + '.svg', debug.svg);
+          if (debug.png) debugFolder?.file(debug.fileName + '.png', debug.png);
+        }
+      }
+
       const processingTime = Date.now() - startTime;
       const summaryData = {
         total_processed: result.processedCount,
         total_errors: result.errorCount,
-        fallback_count: result.fallbackCount,
-        skipped_participants: result.skippedParticipants,
         success_rate: `${Math.round(
           (result.processedCount / rows.length) * 100
         )}%`,
@@ -1551,6 +1513,7 @@ export async function POST(request: NextRequest) {
               x: templateSettings.qrPosition.offsetX,
               y: templateSettings.qrPosition.offsetY,
             },
+            supported_range: `±${CONFIG.OFFSET_LIMITS.MAX}px`,
           },
           text_overlay: templateSettings.textOverlay.enabled
             ? {
@@ -1560,6 +1523,14 @@ export async function POST(request: NextRequest) {
                   size: `${templateSettings.textOverlay.fontSize}px`,
                   weight: templateSettings.textOverlay.fontWeight,
                   color: templateSettings.textOverlay.fontColor,
+                  size_category:
+                    templateSettings.textOverlay.fontSize <= 50
+                      ? "normal"
+                      : templateSettings.textOverlay.fontSize <= 150
+                      ? "large"
+                      : templateSettings.textOverlay.fontSize <= 500
+                      ? "poster"
+                      : "banner",
                 },
                 background_settings: {
                   color: templateSettings.textOverlay.backgroundColor,
@@ -1570,13 +1541,24 @@ export async function POST(request: NextRequest) {
                 position: {
                   x: templateSettings.textOverlay.offsetX,
                   y: templateSettings.textOverlay.offsetY,
+                  extreme_positioning:
+                    Math.abs(templateSettings.textOverlay.offsetX) > 5000 ||
+                    Math.abs(templateSettings.textOverlay.offsetY) > 5000,
                 },
                 text_content: "nama_lengkap dari database",
+                extended_capabilities: {
+                  font_size_range: `${CONFIG.TEXT_SETTINGS.MIN_FONT_SIZE}px - ${CONFIG.TEXT_SETTINGS.MAX_FONT_SIZE}px`,
+                  position_range: `±${CONFIG.TEXT_SETTINGS.POSITION_LIMITS.MAX}px`,
+                  canvas_extension_used:
+                    Math.abs(templateSettings.textOverlay.offsetX) > 2000 ||
+                    Math.abs(templateSettings.textOverlay.offsetY) > 2000 ||
+                    templateSettings.textOverlay.fontSize > 200,
+                },
               }
             : null,
         },
         structure: "organized_by_divisi_with_qr_and_text_overlay",
-        file_naming_format: "nim_nama_lengkap_uniqueid_template.png",
+        file_naming_format: "nim_nama_lengkap_template.png",
         processing_features: {
           qr_code_generation: true,
           text_overlay_rendering: templateSettings.textOverlay.enabled,
@@ -1584,24 +1566,22 @@ export async function POST(request: NextRequest) {
           per_divisi_organization: true,
           batch_processing: true,
           memory_optimization: true,
-          comprehensive_error_handling: true,
-          fallback_qr_generation: true,
-          filename_uniqueness: true,
         },
         performance_metrics: {
           total_items: rows.length,
           processed_successfully: result.processedCount,
-          fallback_items: result.fallbackCount,
           failed_items: result.errorCount,
-          skipped_items: result.skippedParticipants.length,
           items_per_second: Math.round(
             (result.processedCount / processingTime) * 1000
           ),
           divisi_count: selectedDivisi.length,
           max_divisi_allowed: CONFIG.MAX_DIVISI_TEMPLATE,
+          text_rendering_overhead: templateSettings.textOverlay.enabled
+            ? "~40% slower due to text overlay"
+            : "N/A",
         },
-        errors: result.errors.slice(0, 50), // Include more errors for debugging
-        all_errors_count: result.errors.length,
+        errors: result.errors.slice(0, 20),
+        text_overlay_warnings: (result.textOverlayWarnings ?? []).slice(0, 20),
       };
 
       zip.file(
@@ -1614,8 +1594,7 @@ export async function POST(request: NextRequest) {
         type: "nodebuffer",
         compression: "DEFLATE",
         compressionOptions: {
-          level: 6,
-          chunkSize: 1024 * 64,
+          level: 6
         },
         streamFiles: true,
         platform: "UNIX",
@@ -1632,9 +1611,17 @@ export async function POST(request: NextRequest) {
       const textSuffix = templateSettings.textOverlay.enabled
         ? "with_text"
         : "qr_only";
-      const zipFileName = `qr_template_enhanced_${divisiNames}${
+      const positionSuffix =
+        templateSettings.qrPosition.preset === "custom"
+          ? `custom_${Math.abs(templateSettings.qrPosition.offsetX)}_${Math.abs(
+              templateSettings.qrPosition.offsetY
+            )}`
+          : templateSettings.qrPosition.preset;
+      const zipFileName = `qr_template_${divisiNames}${
         selectedDivisi.length > 3 ? "_etc" : ""
-      }_${textSuffix}_${result.processedCount}processed_${result.fallbackCount}fallback_${timestamp}.zip`;
+      }_${textSuffix}_${positionSuffix}_${
+        result.processedCount
+      }items_${timestamp}.zip`;
 
       logOperation("Enhanced Template Processing Completed", {
         fileName: zipFileName,
@@ -1644,11 +1631,12 @@ export async function POST(request: NextRequest) {
         totalTime: `${(totalTime / 1000).toFixed(2)}s`,
         zipTime: `${(zipTime / 1000).toFixed(2)}s`,
         processed: result.processedCount,
-        fallbacks: result.fallbackCount,
         errors: result.errorCount,
-        skipped: result.skippedParticipants.length,
         divisiProcessed: result.divisiProcessed,
         textOverlayEnabled: templateSettings.textOverlay.enabled,
+        textPosition: templateSettings.textOverlay.enabled
+          ? `Y:${templateSettings.textOverlay.offsetY}px`
+          : "N/A",
       });
 
       return new NextResponse(new Uint8Array(zipBuffer), {
@@ -1656,15 +1644,16 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/zip",
           "Content-Disposition": `attachment; filename="${zipFileName}"`,
           "Content-Length": zipBuffer.length.toString(),
-          "X-Processing-Summary": `${result.processedCount}/${rows.length} processed successfully, ${result.fallbackCount} fallbacks, ${result.errorCount} failed`,
+          "X-Processing-Summary": `${result.processedCount}/${rows.length} processed successfully`,
           "X-Divisi-Processed": result.divisiProcessed.join(","),
           "X-Processing-Time": totalTime.toString(),
           "X-Error-Count": result.errorCount.toString(),
-          "X-Fallback-Count": result.fallbackCount.toString(),
-          "X-Skipped-Count": result.skippedParticipants.length.toString(),
           "X-Text-Overlay": templateSettings.textOverlay.enabled
             ? "enabled"
             : "disabled",
+          "X-Text-Position": templateSettings.textOverlay.enabled
+            ? `Y:${templateSettings.textOverlay.offsetY}px`
+            : "N/A",
         },
       });
     }
@@ -1809,7 +1798,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: "Error saat operasi QR code dengan enhanced error handling",
+        message: "Error saat operasi QR code dengan text overlay",
         error: error?.message || "Unknown error",
         processing_time: processingTime,
       },

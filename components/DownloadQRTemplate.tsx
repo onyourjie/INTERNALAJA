@@ -2,17 +2,29 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { 
-  X, Upload, CheckCircle, XCircle, QrCode, Info, Clock, 
-  Zap, Award, TrendingUp, Settings, CheckSquare, Square, 
-  ChevronDown, ChevronUp, Download, AlertTriangle, 
-  FileImage, Activity, Loader, RotateCcw, Move, Maximize2,
-  Type, Palette, AlignCenter, Eye, Layers, Cpu, Sparkles,
-  Monitor, Gauge, MemoryStick, HardDrive
+import {
+  Award,
+  CheckCircle,
+  CheckSquare,
+  ChevronDown, ChevronUp,
+  Clock,
+  Download,
+  Info,
+  Layers,
+  Maximize2,
+  QrCode,
+  RotateCcw,
+  Settings,
+  Square,
+  TrendingUp,
+  Type,
+  Upload,
+  X
 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import QRTemplatePreview from './QRTemplatePreview';
 
-// Enhanced interfaces with Sharp support
+// Enhanced interfaces with anti-crop text overlay
 interface PesertaData {
   id: number;
   unique_id: string;
@@ -23,16 +35,16 @@ interface PesertaData {
   created_at: string;
 }
 
-// Fixed QR Position - no configuration needed
+// FIXED: QR Position - no more configuration needed
 interface QRPosition {
-  preset: 'center';
+  preset: string;
   offsetX: number;
   offsetY: number;
   scale: number;
 }
 
-// Enhanced Sharp Text Overlay interface
-interface SharpTextOverlay {
+// ENHANCED: Anti-Crop Text overlay interface
+interface TextOverlay {
   enabled: boolean;
   preset: 'center' | 'top' | 'bottom' | 'left' | 'right' | 'custom';
   offsetX: number;
@@ -48,24 +60,19 @@ interface SharpTextOverlay {
   fontFamily: string;
   strokeWidth: number;
   strokeColor: string;
-  // Sharp-specific enhancements
+  // ENHANCED: Anti-crop settings
   autoExpandCanvas: boolean;
   minCanvasExpansion: number;
   maxTextWidth?: number;
   lineHeight: number;
+  // NEW: Descender support for anti-crop
   descendersSupport: boolean;
   extraSafetyMargin: number;
-  sharpTextOptions: {
-    antialias: boolean;
-    kerning: boolean;
-    hinting: 'none' | 'slight' | 'medium' | 'full';
-    quality: number;
-    dpi: number;
-  };
+  paddingBottom?: number;
 }
 
-// Enhanced Canvas expansion with Sharp optimization
-interface SharpCanvasExpansion {
+// Enhanced Canvas expansion with anti-crop support
+interface CanvasExpansion {
   top: number;
   right: number;
   bottom: number;
@@ -78,26 +85,18 @@ interface SharpCanvasExpansion {
     width: number;
     height: number;
   };
-  sharpOptimized: boolean;
-  memoryEstimate: number;
-  processingComplexity: 'low' | 'medium' | 'high' | 'extreme';
+  antiCropApplied: boolean;
+  descenderSafety: number;
 }
 
-interface SharpTemplateSettings {
+interface TemplateSettings {
   qrPosition: QRPosition;
-  textOverlay: SharpTextOverlay;
+  textOverlay: TextOverlay;
   canvasExpansion: {
     enabled: boolean;
     autoCalculate: boolean;
     minExpansion: number;
     maxExpansion: number;
-  };
-  sharpProcessing: {
-    enabled: boolean;
-    concurrency: number;
-    memoryLimit: number;
-    pixelLimit: number;
-    qualityMode: 'fast' | 'balanced' | 'quality';
   };
 }
 
@@ -112,10 +111,6 @@ interface DownloadProgress {
   currentDivisi?: string;
   downloadStarted: boolean;
   downloadCompleted: boolean;
-  sharpProcessed: number;
-  fallbackProcessed: number;
-  memoryUsage?: number;
-  processingMode: 'sharp' | 'fallback' | 'mixed';
 }
 
 interface ToastMessage {
@@ -135,64 +130,81 @@ interface DownloadQRTemplateProps {
   isOpen: boolean;
   onClose: () => void;
   availableDivisi: DivisiOption[];
-  onDownload: (templateFile: File, selectedDivisi: string[], templateSettings: SharpTemplateSettings) => Promise<void>;
+  onDownload: (templateFile: File, selectedDivisi: string[], templateSettings: TemplateSettings) => Promise<void>;
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   isLoading: boolean;
 }
 
-// Sharp-based text measurement utility
-const measureTextWithSharp = (
+// ENHANCED: Anti-Crop Text measurement utility
+const measureTextDimensionsAntiCrop = (
   text: string, 
   fontSize: number, 
   fontFamily: string, 
   fontWeight: string,
-  maxWidth?: number
-): { 
-  width: number; 
-  height: number; 
-  lines: string[]; 
-  ascent: number; 
-  descent: number; 
-  safeHeight: number; 
-  actualHeight: number;
-  sharpOptimized: boolean;
-} => {
-  // Enhanced character width calculation based on font family for Sharp processing
-  const fontMultipliers: { [key: string]: number } = {
-    "Arial": 0.55,
-    "Helvetica": 0.55,
-    "Times New Roman": 0.5,
-    "Courier New": 0.6, // Monospace
-    "Verdana": 0.65,
-    "Georgia": 0.52,
-    "Trebuchet MS": 0.58,
-    "Impact": 0.48
-  };
+  maxWidth?: number,
+  padding: number = 0,
+  paddingBottom?: number
+): { width: number; height: number; lines: string[]; ascent: number; descent: number; safeHeight: number; actualHeight: number; bgHeight: number } => {
+  // Create a temporary canvas for measurement
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
   
-  const charWidthMultiplier = fontMultipliers[fontFamily] || 0.55;
-  const avgCharWidth = fontSize * charWidthMultiplier;
-  
-  // Enhanced ascent and descent calculation optimized for Sharp
-  const ascent = fontSize * 0.8;
-  const descent = fontSize * 0.25; // For descenders y, g, p, q, j
-  
-  if (!maxWidth) {
-    const actualHeight = ascent + descent;
-    const safeHeight = actualHeight + fontSize * 0.4; // Sharp-optimized padding
+  if (!ctx) {
+    // Enhanced fallback calculation with NO HEIGHT LIMITS
+    const avgCharWidth = fontSize * 0.6;
+    const estimatedWidth = maxWidth ? Math.min(text.length * avgCharWidth, maxWidth) : text.length * avgCharWidth;
+    const descent = fontSize * 0.35; // Enhanced descender calculation for y, g, p, q, j
+    const ascent = fontSize * 0.8;
+    const actualHeight = ascent + descent; // Real text height
+    const safeHeight = actualHeight + fontSize * 0.3; // Extra safety but NO LIMITS
     
     return {
-      width: Math.ceil(text.length * avgCharWidth),
-      height: Math.ceil(safeHeight),
+      width: estimatedWidth,
+      height: safeHeight,
       lines: [text],
       ascent,
       descent,
       safeHeight,
       actualHeight,
-      sharpOptimized: true
+      bgHeight: safeHeight + padding + (typeof paddingBottom === 'number' ? paddingBottom : padding)
     };
   }
 
-  // Text wrapping optimized for Sharp processing
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+  
+  // Enhanced text metrics with descender support
+  const sampleMetrics = ctx.measureText(text);
+  
+  // CRITICAL: Enhanced descender calculation for anti-crop
+  const actualAscent = sampleMetrics.actualBoundingBoxAscent || fontSize * 0.8;
+  const actualDescent = sampleMetrics.actualBoundingBoxDescent || fontSize * 0.35;
+  
+  // Test with characters that have descenders to ensure proper measurement
+  const testText = text + 'ygpqj'; // Add descender test characters
+  const testMetrics = ctx.measureText(testText);
+  const enhancedDescent = Math.max(
+    actualDescent,
+    testMetrics.actualBoundingBoxDescent || fontSize * 0.35,
+    fontSize * 0.25 // Minimum descender space
+  );
+  
+  if (!maxWidth) {
+    const actualHeight = actualAscent + enhancedDescent; // Real height needed
+    const safeHeight = actualHeight + fontSize * 0.4; // Extra anti-crop padding but NO LIMITS
+    
+    return {
+      width: sampleMetrics.width,
+      height: safeHeight, // UNLIMITED HEIGHT
+      lines: [text],
+      ascent: actualAscent,
+      descent: enhancedDescent,
+      safeHeight,
+      actualHeight,
+      bgHeight: safeHeight + padding + (typeof paddingBottom === 'number' ? paddingBottom : padding)
+    };
+  }
+
+  // Handle text wrapping with NO HEIGHT LIMITS
   const words = text.split(' ');
   const lines: string[] = [];
   let currentLine = '';
@@ -200,11 +212,11 @@ const measureTextWithSharp = (
 
   for (const word of words) {
     const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const lineWidth = testLine.length * avgCharWidth;
+    const lineMetrics = ctx.measureText(testLine);
     
-    if (lineWidth > maxWidth && currentLine) {
+    if (lineMetrics.width > maxWidth && currentLine) {
       lines.push(currentLine);
-      maxLineWidth = Math.max(maxLineWidth, currentLine.length * avgCharWidth);
+      maxLineWidth = Math.max(maxLineWidth, ctx.measureText(currentLine).width);
       currentLine = word;
     } else {
       currentLine = testLine;
@@ -213,33 +225,33 @@ const measureTextWithSharp = (
   
   if (currentLine) {
     lines.push(currentLine);
-    maxLineWidth = Math.max(maxLineWidth, currentLine.length * avgCharWidth);
+    maxLineWidth = Math.max(maxLineWidth, ctx.measureText(currentLine).width);
   }
 
-  // Multi-line height calculation optimized for Sharp
-  const lineSpacing = fontSize * 0.2;
-  const actualHeight = lines.length * (ascent + descent) + (lines.length - 1) * lineSpacing;
-  const safeHeight = actualHeight + fontSize * 0.5; // Sharp-optimized multi-line padding
+  // Enhanced multi-line height calculation with NO LIMITS
+  const lineSpacing = fontSize * 0.3;
+  const actualHeight = lines.length * (actualAscent + enhancedDescent) + (lines.length - 1) * lineSpacing;
+  const safeHeight = actualHeight + fontSize * 0.5; // Extra safety for multi-line but NO HEIGHT LIMITS
   
   return {
-    width: Math.ceil(maxLineWidth),
-    height: Math.ceil(safeHeight),
+    width: maxLineWidth,
+    height: safeHeight, // UNLIMITED HEIGHT - bisa sangat besar sesuai kebutuhan
     lines,
-    ascent,
-    descent,
+    ascent: actualAscent,
+    descent: enhancedDescent,
     safeHeight,
     actualHeight,
-    sharpOptimized: true
+    bgHeight: safeHeight + padding + (typeof paddingBottom === 'number' ? paddingBottom : padding)
   };
 };
 
-// Sharp canvas expansion calculator with memory estimation
-const calculateSharpCanvasExpansion = (
+// ENHANCED: Anti-Crop Canvas expansion calculator
+const calculateCanvasExpansionAntiCrop = (
   templateWidth: number,
   templateHeight: number,
-  textOverlay: SharpTextOverlay,
+  textOverlay: TextOverlay,
   sampleText: string = "Sample Participant Name with ygpqj"
-): SharpCanvasExpansion => {
+): CanvasExpansion => {
   if (!textOverlay.enabled) {
     return {
       top: 0,
@@ -249,14 +261,13 @@ const calculateSharpCanvasExpansion = (
       newWidth: templateWidth,
       newHeight: templateHeight,
       textBounds: { x: 0, y: 0, width: 0, height: 0 },
-      sharpOptimized: false,
-      memoryEstimate: 0,
-      processingComplexity: 'low'
+      antiCropApplied: false,
+      descenderSafety: 0
     };
   }
 
-  // Sharp-optimized text dimension measurement
-  const textDimensions = measureTextWithSharp(
+  // Enhanced text dimension measurement with UNLIMITED HEIGHT
+  const textDimensions = measureTextDimensionsAntiCrop(
     sampleText,
     textOverlay.fontSize,
     textOverlay.fontFamily,
@@ -275,56 +286,136 @@ const calculateSharpCanvasExpansion = (
     textX -= textDimensions.width;
   }
 
-  // Sharp-optimized padding calculation
+  // ENHANCED: Anti-crop padding calculation with NO HEIGHT RESTRICTIONS
   const basePadding = textOverlay.padding;
-  const fontSizeMultiplier = Math.max(1.2, textOverlay.fontSize / 150); // Sharp-optimized multiplier
+  const fontSizeMultiplier = Math.max(1.5, textOverlay.fontSize / 100); // Dynamic multiplier
   const adjustedPadding = basePadding * fontSizeMultiplier;
   
-  // Enhanced descender safety for Sharp
-  const descenderSafety = textDimensions.descent + textOverlay.fontSize * 0.25 + textOverlay.extraSafetyMargin;
+  // CRITICAL: Enhanced descender safety for anti-crop with NO LIMITS
+  const descenderSafety = textDimensions.descent + textOverlay.fontSize * 0.3 + textOverlay.extraSafetyMargin;
   const ascenderSafety = textDimensions.ascent + textOverlay.fontSize * 0.1;
   
   const textBounds = {
     x: textX - adjustedPadding,
-    y: textY - adjustedPadding - ascenderSafety,
+    y: textY - adjustedPadding - ascenderSafety, // Account for ascender
     width: textDimensions.width + (adjustedPadding * 2),
-    height: textDimensions.safeHeight + (adjustedPadding * 2) + descenderSafety + ascenderSafety
+    height: textDimensions.safeHeight + (adjustedPadding * 2) + descenderSafety + ascenderSafety // UNLIMITED HEIGHT
   };
 
-  // Sharp-optimized expansion calculation
+  // ENHANCED: Expansion calculation with UNLIMITED HEIGHT EXPANSION
   const baseExpansion = textOverlay.minCanvasExpansion;
-  const sharpMargin = Math.max(50, textOverlay.fontSize * 0.6); // Sharp-optimized margin
+  const antiCropMargin = Math.max(100, textOverlay.fontSize * 0.8); // Dynamic anti-crop margin
   
-  const expansionLeft = Math.max(0, -textBounds.x + baseExpansion + sharpMargin);
-  const expansionTop = Math.max(0, -textBounds.y + baseExpansion + sharpMargin);
-  const expansionRight = Math.max(0, (textBounds.x + textBounds.width) - templateWidth + baseExpansion + sharpMargin);
-  const expansionBottom = Math.max(0, (textBounds.y + textBounds.height) - templateHeight + baseExpansion + sharpMargin);
+  const expansionLeft = Math.max(0, -textBounds.x + baseExpansion + antiCropMargin);
+  const expansionTop = Math.max(0, -textBounds.y + baseExpansion + antiCropMargin);
+  const expansionRight = Math.max(0, (textBounds.x + textBounds.width) - templateWidth + baseExpansion + antiCropMargin);
+  
+  // CRITICAL: UNLIMITED BOTTOM EXPANSION - text bisa setinggi apapun
+  const expansionBottom = Math.max(0, (textBounds.y + textBounds.height) - templateHeight + baseExpansion + antiCropMargin);
 
+  const antiCropApplied = expansionLeft > 0 || expansionTop > 0 || expansionRight > 0 || expansionBottom > 0;
+
+  // UNLIMITED HEIGHT: Canvas bisa diperluas tanpa batas
+  const newHeight = templateHeight + expansionTop + expansionBottom; // Bisa sangat tinggi
   const newWidth = templateWidth + expansionLeft + expansionRight;
-  const newHeight = templateHeight + expansionTop + expansionBottom;
-
-  // Memory estimate for Sharp processing
-  const pixelCount = newWidth * newHeight;
-  const memoryEstimate = pixelCount * 4; // 4 bytes per pixel (RGBA)
-
-  // Determine processing complexity
-  let processingComplexity: 'low' | 'medium' | 'high' | 'extreme' = 'low';
-  if (memoryEstimate > 100 * 1024 * 1024) processingComplexity = 'extreme'; // > 100MB
-  else if (memoryEstimate > 50 * 1024 * 1024) processingComplexity = 'high'; // > 50MB
-  else if (memoryEstimate > 20 * 1024 * 1024) processingComplexity = 'medium'; // > 20MB
 
   return {
     top: expansionTop,
     right: expansionRight,
-    bottom: expansionBottom,
+    bottom: expansionBottom, // UNLIMITED - bisa sangat besar
     left: expansionLeft,
     newWidth,
-    newHeight,
+    newHeight, // UNLIMITED HEIGHT - tidak ada batasan tinggi
     textBounds,
-    sharpOptimized: true,
-    memoryEstimate,
-    processingComplexity
+    antiCropApplied,
+    descenderSafety
   };
+};
+
+const renderTextWithUnlimitedHeight = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  textOverlay: TextOverlay,
+  canvasWidth: number,
+  canvasHeight: number // Bisa unlimited
+) => {
+  if (!textOverlay.enabled) return;
+
+  // Measure text with unlimited height
+  const textDimensions = measureTextDimensionsAntiCrop(
+    text,
+    textOverlay.fontSize,
+    textOverlay.fontFamily,
+    textOverlay.fontWeight,
+    textOverlay.maxTextWidth,
+    textOverlay.padding,
+    textOverlay.paddingBottom
+  );
+
+  // Set font properties
+  ctx.font = `${textOverlay.fontWeight} ${textOverlay.fontSize}px ${textOverlay.fontFamily}`;
+  ctx.textAlign = textOverlay.textAlign as CanvasTextAlign;
+  ctx.textBaseline = 'top'; // Consistent baseline
+
+  // Calculate position (no height restrictions)
+  let textX = textOverlay.offsetX;
+  let textY = textOverlay.offsetY;
+
+  // Adjust for text alignment
+  if (textOverlay.textAlign === 'center') {
+    textX = textOverlay.offsetX;
+  } else if (textOverlay.textAlign === 'right') {
+    textX = textOverlay.offsetX;
+  }
+
+  // UNLIMITED HEIGHT: Y position bisa sangat besar
+  const finalY = textY;
+
+  // Draw background if needed (with unlimited height)
+  if (textOverlay.backgroundOpacity > 0) {
+    const bgX = textX - (textOverlay.textAlign === 'center' ? textDimensions.width / 2 : 
+                       textOverlay.textAlign === 'right' ? textDimensions.width : 0) - textOverlay.padding;
+    const bgY = finalY - textOverlay.padding;
+    const bgWidth = textDimensions.width + (textOverlay.padding * 2);
+    const bgHeight = textDimensions.bgHeight;
+
+    ctx.save();
+    ctx.globalAlpha = textOverlay.backgroundOpacity;
+    ctx.fillStyle = textOverlay.backgroundColor;
+    if (textOverlay.borderRadius > 0) {
+      ctx.beginPath();
+      ctx.roundRect(bgX, bgY, bgWidth, bgHeight, textOverlay.borderRadius);
+      ctx.fill();
+    } else {
+      ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+    }
+    ctx.restore();
+  }
+
+  // Draw text stroke if needed (unlimited height)
+  if (textOverlay.strokeWidth > 0) {
+    ctx.strokeStyle = textOverlay.strokeColor;
+    ctx.lineWidth = textOverlay.strokeWidth;
+    if (textDimensions.lines.length === 1) {
+      ctx.strokeText(text, textX, finalY);
+    } else {
+      textDimensions.lines.forEach((line, index) => {
+        const lineY = finalY + (index * (textOverlay.fontSize * textOverlay.lineHeight));
+        ctx.strokeText(line, textX, lineY);
+      });
+    }
+  }
+
+  // Draw text fill (unlimited height)
+  ctx.fillStyle = textOverlay.fontColor;
+  if (textDimensions.lines.length === 1) {
+    ctx.fillText(text, textX, finalY);
+  } else {
+    textDimensions.lines.forEach((line, index) => {
+      const lineY = finalY + (index * (textOverlay.fontSize * textOverlay.lineHeight));
+      ctx.fillText(line, textX, lineY);
+    });
+  }
 };
 
 // Components
@@ -340,7 +431,7 @@ const LoadingSpinner: React.FC<{ size?: 'sm' | 'md' | 'lg' }> = ({ size = 'md' }
   );
 };
 
-const SharpProgressBar: React.FC<{
+const ProgressBar: React.FC<{
   progress: DownloadProgress;
   onCancel?: () => void;
 }> = ({ progress, onCancel }) => {
@@ -357,17 +448,12 @@ const SharpProgressBar: React.FC<{
     return `${seconds}s`;
   };
 
-  const formatMemory = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
-  };
-
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
+    <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-blue-800 flex items-center">
-          <Cpu className="mr-2 animate-pulse text-blue-600" size={20} />
-          Sharp Processing Template QR + Enhanced Text
+          <Settings className="mr-2 animate-spin text-blue-600" size={20} />
+          Processing Template QR + Anti-Crop Text
         </h3>
         {onCancel && (
           <button
@@ -387,7 +473,7 @@ const SharpProgressBar: React.FC<{
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div 
-              className="bg-gradient-to-r from-blue-500 via-purple-500 to-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+              className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-300 ease-out"
               style={{ width: `${progress.percentage}%` }}
             />
           </div>
@@ -395,7 +481,7 @@ const SharpProgressBar: React.FC<{
 
         <div className="grid md:grid-cols-2 gap-4 text-sm">
           <div className="flex items-center text-gray-700">
-            <Activity className="w-4 h-4 mr-2 text-blue-500" />
+            <Clock className="w-4 h-4 mr-2 text-gray-500" />
             <span className="font-medium">Status:</span>
             <span className="ml-2">{progress.stage}</span>
           </div>
@@ -411,57 +497,26 @@ const SharpProgressBar: React.FC<{
           )}
           
           <div className="flex items-center text-gray-700">
-            <Clock className="w-4 h-4 mr-2 text-gray-500" />
+            <TrendingUp className="w-4 h-4 mr-2 text-gray-500" />
             <span className="font-medium">Waktu berlalu:</span>
             <span className="ml-2">{formatTime(elapsed)}</span>
           </div>
           
           {remaining > 1000 && (
             <div className="flex items-center text-gray-700">
-              <TrendingUp className="w-4 h-4 mr-2 text-gray-500" />
+              <Clock className="w-4 h-4 mr-2 text-gray-500" />
               <span className="font-medium">Estimasi sisa:</span>
               <span className="ml-2">{formatTime(remaining)}</span>
             </div>
           )}
         </div>
 
-        {/* Sharp Processing Stats */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-            <div className="flex items-center text-green-800 text-sm">
-              <Sparkles className="w-4 h-4 mr-2" />
-              <span className="font-medium">Sharp Processed:</span>
-              <span className="ml-2 font-bold">{progress.sharpProcessed}</span>
-            </div>
-          </div>
-          
-          <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-            <div className="flex items-center text-yellow-800 text-sm">
-              <AlertTriangle className="w-4 h-4 mr-2" />
-              <span className="font-medium">Fallback:</span>
-              <span className="ml-2 font-bold">{progress.fallbackProcessed}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Memory Usage */}
-        {progress.memoryUsage && (
-          <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-            <div className="flex items-center text-blue-800 text-sm">
-              <MemoryStick className="w-4 h-4 mr-2" />
-              <span className="font-medium">Memory Usage:</span>
-              <span className="ml-2">{formatMemory(progress.memoryUsage)}</span>
-              <span className="ml-2 text-blue-600">({progress.processingMode} mode)</span>
-            </div>
-          </div>
-        )}
-
-        {/* Sharp Processing Info */}
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-3 rounded-lg border border-blue-200">
-          <div className="flex items-center text-blue-800 text-sm">
+        {/* Anti-Crop Processing Info */}
+        <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+          <div className="flex items-center text-green-800 text-sm">
             <Type className="w-4 h-4 mr-2" />
-            <span className="font-medium">Sharp Enhanced:</span>
-            <span className="ml-2">High-quality text rendering dengan anti-aliasing, kerning, dan descender protection</span>
+            <span className="font-medium">Anti-Crop Mode Active:</span>
+            <span className="ml-2">Text tidak akan terpotong (y, g, p, q, j lengkap)</span>
           </div>
         </div>
       </div>
@@ -508,7 +563,7 @@ const DivisiSelector: React.FC<{
         >
           <div className="flex-1">
             {selectedDivisi.length === 0 ? (
-              <span className="text-gray-500">Pilih divisi untuk Sharp template processing (max {maxSelection})</span>
+              <span className="text-gray-500">Pilih divisi untuk template (max {maxSelection})</span>
             ) : (
               <div className="flex flex-wrap gap-1">
                 {selectedDivisi.slice(0, 3).map(divisi => (
@@ -582,7 +637,7 @@ const DivisiSelector: React.FC<{
         )}
       </div>
       
-      {/* Backdrop */}
+      {/* Backdrop untuk menutup dropdown ketika klik di luar */}
       {showDropdown && !disabled && (
         <div 
           className="fixed inset-0 z-0" 
@@ -593,10 +648,10 @@ const DivisiSelector: React.FC<{
   );
 };
 
-// Enhanced Sharp Text Overlay Controller Component
-const SharpTextOverlayController: React.FC<{
-  textOverlay: SharpTextOverlay;
-  onTextOverlayChange: (textOverlay: SharpTextOverlay) => void;
+// ENHANCED: Anti-Crop Text Overlay Controller Component
+const TextOverlayControllerAntiCrop: React.FC<{
+  textOverlay: TextOverlay;
+  onTextOverlayChange: (textOverlay: TextOverlay) => void;
   disabled?: boolean;
   templateWidth?: number;
   templateHeight?: number;
@@ -615,16 +670,16 @@ const SharpTextOverlayController: React.FC<{
     { value: 'Arial', label: 'Arial' },
     { value: 'Helvetica', label: 'Helvetica' },
     { value: 'Times New Roman', label: 'Times New Roman' },
-    { value: 'Courier New', label: 'Courier New (Monospace)' },
+    { value: 'Courier New', label: 'Courier New' },
     { value: 'Verdana', label: 'Verdana' },
     { value: 'Georgia', label: 'Georgia' },
     { value: 'Trebuchet MS', label: 'Trebuchet MS' },
-    { value: 'Impact', label: 'Impact' }
+    { value: 'Comic Sans MS', label: 'Comic Sans MS' }
   ];
 
-  // Calculate Sharp canvas expansion preview
+  // Calculate canvas expansion preview with anti-crop
   const canvasExpansion = useMemo(() => {
-    return calculateSharpCanvasExpansion(
+    return calculateCanvasExpansionAntiCrop(
       templateWidth, 
       templateHeight, 
       textOverlay, 
@@ -632,8 +687,7 @@ const SharpTextOverlayController: React.FC<{
     );
   }, [templateWidth, templateHeight, textOverlay]);
 
-  const needsExpansion = canvasExpansion.sharpOptimized && 
-    (canvasExpansion.newWidth > templateWidth || canvasExpansion.newHeight > templateHeight);
+  const needsExpansion = canvasExpansion.antiCropApplied;
 
   const handleToggleEnabled = () => {
     onTextOverlayChange({
@@ -642,28 +696,92 @@ const SharpTextOverlayController: React.FC<{
     });
   };
 
-  const handlePropertyChange = (property: keyof SharpTextOverlay, value: any) => {
+  const handlePresetChange = (preset: TextOverlay['preset']) => {
+    let defaultOffsets = { offsetX: 0, offsetY: 750 }; // Default Y offset for nama
+    switch (preset) {
+      case 'top':
+        defaultOffsets = { offsetX: templateWidth / 2, offsetY: 100 };
+        break;
+      case 'bottom':
+        defaultOffsets = { offsetX: templateWidth / 2, offsetY: templateHeight - 100 };
+        break;
+      case 'left':
+        defaultOffsets = { offsetX: 50, offsetY: templateHeight / 2 };
+        break;
+      case 'right':
+        defaultOffsets = { offsetX: templateWidth - 50, offsetY: templateHeight / 2 };
+        break;
+      case 'center':
+        defaultOffsets = { offsetX: templateWidth / 2, offsetY: templateHeight / 2 };
+        break;
+      case 'custom':
+        defaultOffsets = { offsetX: textOverlay.offsetX, offsetY: textOverlay.offsetY };
+        break;
+    }
+    onTextOverlayChange({
+      ...textOverlay,
+      preset,
+      ...defaultOffsets
+    });
+  };
+
+  const handleOffsetChange = (axis: 'X' | 'Y', value: string | number) => {
+    if (typeof value === 'string') {
+      if (value === '' || value === '-') {
+        return;
+      }
+      
+      const numValue = parseInt(value);
+      if (!isNaN(numValue)) {
+        const clampedValue = Math.max(-10000, Math.min(10000, numValue));
+        onTextOverlayChange({
+          ...textOverlay,
+          [`offset${axis}`]: clampedValue
+        });
+      }
+    } else {
+      onTextOverlayChange({
+        ...textOverlay,
+        [`offset${axis}`]: value
+      });
+    }
+  };
+
+  const handlePropertyChange = (property: keyof TextOverlay, value: any) => {
     onTextOverlayChange({
       ...textOverlay,
       [property]: value
     });
   };
 
-  const handleSharpOptionChange = (property: keyof SharpTextOverlay['sharpTextOptions'], value: any) => {
-    onTextOverlayChange({
-      ...textOverlay,
-      sharpTextOptions: {
-        ...textOverlay.sharpTextOptions,
-        [property]: value
+  const handleFontSizeChange = (value: string | number) => {
+    if (typeof value === 'string') {
+      if (value === '') {
+        return;
       }
-    });
+      
+      const numValue = parseInt(value);
+      
+      if (!isNaN(numValue)) {
+        const clampedValue = Math.max(12, Math.min(1000, numValue));
+        onTextOverlayChange({
+          ...textOverlay,
+          fontSize: clampedValue
+        });
+      }
+    } else {
+      onTextOverlayChange({
+        ...textOverlay,
+        fontSize: value
+      });
+    }
   };
 
-  const resetToSharpDefaults = () => {
+  const resetToDefault = () => {
     onTextOverlayChange({
       enabled: true,
       preset: 'bottom',
-      offsetX: templateWidth / 2,
+      offsetX: templateWidth / 2, // Center X by default
       offsetY: 750,
       fontSize: 24,
       fontWeight: 'bold',
@@ -676,61 +794,125 @@ const SharpTextOverlayController: React.FC<{
       fontFamily: 'Arial',
       strokeWidth: 0,
       strokeColor: '#FFFFFF',
+      // ENHANCED: Anti-cropping settings
       autoExpandCanvas: true,
       minCanvasExpansion: 50,
       lineHeight: 1.2,
       descendersSupport: true,
-      extraSafetyMargin: 20,
-      sharpTextOptions: {
-        antialias: true,
-        kerning: true,
-        hinting: 'full',
-        quality: 95,
-        dpi: 300
-      }
+      extraSafetyMargin: 20
     });
   };
 
-  const formatMemory = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  const handleSafePositioning = () => {
+    // Set safe positioning that won't require canvas expansion
+    const safeY = Math.min(textOverlay.offsetY, templateHeight - 100);
+    const safeX = Math.max(50, Math.min(textOverlay.offsetX, templateWidth - 50));
+    
+    onTextOverlayChange({
+      ...textOverlay,
+      offsetX: safeX,
+      offsetY: safeY,
+      autoExpandCanvas: false
+    });
   };
 
-  const getComplexityColor = (complexity: string) => {
-    switch (complexity) {
-      case 'low': return 'text-green-700 bg-green-100';
-      case 'medium': return 'text-yellow-700 bg-yellow-100';
-      case 'high': return 'text-orange-700 bg-orange-100';
-      case 'extreme': return 'text-red-700 bg-red-100';
-      default: return 'text-gray-700 bg-gray-100';
+  // Tambahkan fungsi validasi posisi text overlay
+  function clampTextOverlayPosition(
+    textOverlay: TextOverlay,
+    templateWidth: number,
+    templateHeight: number,
+    addToast: (toast: Omit<ToastMessage, 'id'>) => void,
+    sampleText: string = "Amelia Rizky Ramadhan"
+  ): TextOverlay {
+    // Ukur lebar/tinggi text real pakai canvas
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    let textWidth: number, textHeight: number;
+    if (ctx) {
+      ctx.font = `${textOverlay.fontWeight} ${textOverlay.fontSize}px ${textOverlay.fontFamily}`;
+      const textMetrics = ctx.measureText(sampleText);
+      textWidth = textMetrics.width + textOverlay.padding * 2;
+      textHeight = textOverlay.fontSize * textOverlay.lineHeight + textOverlay.padding * 2;
+    } else {
+      // Fallback jika ctx null
+      textWidth = (textOverlay.fontSize * sampleText.length * 0.6) + textOverlay.padding * 2;
+      textHeight = textOverlay.fontSize * textOverlay.lineHeight + textOverlay.padding * 2;
     }
-  };
+
+    let corrected = false;
+    let newOffsetY = textOverlay.offsetY;
+    let newOffsetX = textOverlay.offsetX;
+
+    // Clamp Y
+    if (textOverlay.offsetY + textHeight > templateHeight) {
+      newOffsetY = Math.max(0, templateHeight - textHeight);
+      corrected = true;
+    }
+    if (textOverlay.offsetY < 0) {
+      newOffsetY = 0;
+      corrected = true;
+    }
+    // Clamp X (center align)
+    if (textOverlay.textAlign === 'center') {
+      if (textOverlay.offsetX - textWidth / 2 < 0) {
+        newOffsetX = textWidth / 2;
+        corrected = true;
+      }
+      if (textOverlay.offsetX + textWidth / 2 > templateWidth) {
+        newOffsetX = templateWidth - textWidth / 2;
+        corrected = true;
+      }
+    } else {
+      if (textOverlay.offsetX + textWidth > templateWidth) {
+        newOffsetX = templateWidth - textWidth;
+        corrected = true;
+      }
+      if (textOverlay.offsetX < 0) {
+        newOffsetX = 0;
+        corrected = true;
+      }
+    }
+
+    if (corrected) {
+      addToast({
+        type: 'warning',
+        title: 'Posisi Text Diperbaiki',
+        message: 'Posisi text overlay otomatis dikoreksi agar tidak keluar dari template.'
+      });
+    }
+
+    return {
+      ...textOverlay,
+      offsetY: newOffsetY,
+      offsetX: newOffsetX
+    };
+  }
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
+    <div className="bg-gray-50 rounded-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold flex items-center">
-          <Sparkles className="mr-2 text-blue-600" size={20} />
-          Sharp-Enhanced Text Overlay Settings
+          <Type className="mr-2 text-green-600" size={20} />
+          Anti-Crop Text Overlay Settings
           {needsExpansion && (
-            <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
+            <span className="ml-2 bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
               Canvas Will Expand
             </span>
           )}
-          {textOverlay.sharpTextOptions.antialias && (
+          {textOverlay.descendersSupport && (
             <span className="ml-2 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-              Sharp Optimized
+              Anti-Crop Active
             </span>
           )}
         </h3>
         <div className="flex items-center gap-2">
           <button
-            onClick={resetToSharpDefaults}
+            onClick={resetToDefault}
             disabled={disabled}
-            className="flex items-center px-3 py-1 text-sm bg-blue-200 text-blue-700 rounded-lg hover:bg-blue-300 disabled:opacity-50 transition-colors"
+            className="flex items-center px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors"
           >
-            <Cpu className="mr-1" size={14} />
-            Sharp Defaults
+            <RotateCcw className="mr-1" size={14} />
+            Reset
           </button>
           <button
             onClick={handleToggleEnabled}
@@ -746,110 +928,38 @@ const SharpTextOverlayController: React.FC<{
         </div>
       </div>
 
-      {/* Sharp Canvas expansion info */}
+      {/* ENHANCED: Canvas expansion warning/info with anti-crop details */}
       {textOverlay.enabled && needsExpansion && (
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h4 className="font-medium text-blue-800 mb-2 flex items-center">
-                <Cpu className="w-4 h-4 mr-2" />
-                Sharp Canvas Auto-Expansion Detected
+              <h4 className="font-medium text-orange-800 mb-2 flex items-center">
+                <Maximize2 className="w-4 h-4 mr-2" />
+                Anti-Crop Canvas Auto-Expansion Detected
               </h4>
-              <div className="text-sm text-blue-700 space-y-1">
+              <div className="text-sm text-orange-700 space-y-1">
                 <p><strong>Original:</strong> {templateWidth} × {templateHeight}px</p>
                 <p><strong>New Size:</strong> {canvasExpansion.newWidth} × {canvasExpansion.newHeight}px</p>
                 <p><strong>Expansion:</strong> Top:{canvasExpansion.top}px, Right:{canvasExpansion.right}px, Bottom:{canvasExpansion.bottom}px, Left:{canvasExpansion.left}px</p>
-                <p><strong>Memory Estimate:</strong> {formatMemory(canvasExpansion.memoryEstimate)}</p>
-                <p className="flex items-center">
-                  <strong>Complexity:</strong>
-                  <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${getComplexityColor(canvasExpansion.processingComplexity)}`}>
-                    {canvasExpansion.processingComplexity.toUpperCase()}
-                  </span>
-                </p>
+                <p><strong>Anti-Crop Safety:</strong> Descender space: {canvasExpansion.descenderSafety.toFixed(1)}px (untuk huruf y, g, p, q, j)</p>
               </div>
             </div>
+            <button
+              onClick={handleSafePositioning}
+              disabled={disabled}
+              className="ml-4 px-3 py-1 text-xs bg-orange-200 text-orange-800 rounded hover:bg-orange-300 disabled:opacity-50"
+            >
+              Fix Position
+            </button>
           </div>
         </div>
       )}
 
       {textOverlay.enabled && (
         <div className="space-y-6">
-          {/* Sharp Processing Settings */}
+          {/* ENHANCED: Anti-Crop settings */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center">
-              <Cpu className="w-4 h-4 mr-2" />
-              Sharp Processing Options
-            </label>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="antialias"
-                  checked={textOverlay.sharpTextOptions.antialias}
-                  onChange={(e) => handleSharpOptionChange('antialias', e.target.checked)}
-                  disabled={disabled}
-                  className="mr-2"
-                />
-                <label htmlFor="antialias" className="text-sm text-gray-700">
-                  Anti-aliasing (smoother edges)
-                </label>
-              </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="kerning"
-                  checked={textOverlay.sharpTextOptions.kerning}
-                  onChange={(e) => handleSharpOptionChange('kerning', e.target.checked)}
-                  disabled={disabled}
-                  className="mr-2"
-                />
-                <label htmlFor="kerning" className="text-sm text-gray-700">
-                  Kerning (letter spacing)
-                </label>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Hinting Quality: {textOverlay.sharpTextOptions.hinting}
-                </label>
-                <select
-                  value={textOverlay.sharpTextOptions.hinting}
-                  onChange={(e) => handleSharpOptionChange('hinting', e.target.value)}
-                  disabled={disabled}
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                >
-                  <option value="none">None</option>
-                  <option value="slight">Slight</option>
-                  <option value="medium">Medium</option>
-                  <option value="full">Full (Best Quality)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Quality: {textOverlay.sharpTextOptions.quality}%
-                </label>
-                <input
-                  type="range"
-                  min="60"
-                  max="100"
-                  step="5"
-                  value={textOverlay.sharpTextOptions.quality}
-                  onChange={(e) => handleSharpOptionChange('quality', parseInt(e.target.value))}
-                  disabled={disabled}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
-                />
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>60%</span>
-                  <span>80%</span>
-                  <span>100%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Enhanced Anti-Crop settings */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center">
-              <Type className="w-4 h-4 mr-2" />
+            <label className="block text-sm font-medium text-gray-700 mb-3">
               Anti-Crop Settings (Huruf y, g, p, q, j tidak terpotong)
             </label>
             <div className="grid md:grid-cols-2 gap-4">
@@ -880,6 +990,48 @@ const SharpTextOverlayController: React.FC<{
                   disabled={disabled}
                   className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
                 />
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>10px</span>
+                  <span>50px</span>
+                  <span>100px</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Canvas expansion settings */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Canvas Expansion Settings (Anti-Cropping)
+            </label>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="autoExpandCanvas"
+                  checked={textOverlay.autoExpandCanvas}
+                  onChange={(e) => handlePropertyChange('autoExpandCanvas', e.target.checked)}
+                  disabled={disabled}
+                  className="mr-2"
+                />
+                <label htmlFor="autoExpandCanvas" className="text-sm text-gray-700">
+                  Auto-expand canvas for text positioning
+                </label>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Min Expansion Padding: {textOverlay.minCanvasExpansion}px
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="200"
+                  step="10"
+                  value={textOverlay.minCanvasExpansion}
+                  onChange={(e) => handlePropertyChange('minCanvasExpansion', parseInt(e.target.value))}
+                  disabled={disabled}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                />
               </div>
             </div>
           </div>
@@ -893,39 +1045,12 @@ const SharpTextOverlayController: React.FC<{
               {presetOptions.map(option => (
                 <button
                   key={option.value}
-                  onClick={() => {
-                    let defaultOffsets = { offsetX: 0, offsetY: 750 };
-                    
-                    switch (option.value) {
-                      case 'top':
-                        defaultOffsets = { offsetX: templateWidth / 2, offsetY: 100 };
-                        break;
-                      case 'bottom':
-                        defaultOffsets = { offsetX: templateWidth / 2, offsetY: 750 };
-                        break;
-                      case 'left':
-                        defaultOffsets = { offsetX: 50, offsetY: 400 };
-                        break;
-                      case 'right':
-                        defaultOffsets = { offsetX: templateWidth - 50, offsetY: 400 };
-                        break;
-                      case 'center':
-                        defaultOffsets = { offsetX: templateWidth / 2, offsetY: templateHeight / 2 };
-                        break;
-                      case 'custom':
-                        defaultOffsets = { offsetX: textOverlay.offsetX, offsetY: textOverlay.offsetY };
-                        break;
-                    }
-
-                    handlePropertyChange('preset', option.value);
-                    handlePropertyChange('offsetX', defaultOffsets.offsetX);
-                    handlePropertyChange('offsetY', defaultOffsets.offsetY);
-                  }}
+                  onClick={() => handlePresetChange(option.value as TextOverlay['preset'])}
                   disabled={disabled}
                   className={`p-3 text-left rounded-lg border transition-colors disabled:opacity-50 ${
                     textOverlay.preset === option.value
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-25'
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-green-300 hover:bg-green-25'
                   }`}
                 >
                   <div className="flex items-center">
@@ -941,13 +1066,13 @@ const SharpTextOverlayController: React.FC<{
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Font Family (Sharp Optimized)
+                Font Family
               </label>
               <select
                 value={textOverlay.fontFamily}
                 onChange={(e) => handlePropertyChange('fontFamily', e.target.value)}
                 disabled={disabled}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 disabled:opacity-50"
               >
                 {fontFamilyOptions.map(font => (
                   <option key={font.value} value={font.value}>
@@ -959,9 +1084,10 @@ const SharpTextOverlayController: React.FC<{
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Font Size: {textOverlay.fontSize}px (Sharp Range: 12px - 1000px)
+                Font Size: {textOverlay.fontSize}px (Anti-Crop: 12px - 1000px)
               </label>
               <div className="space-y-3">
+                {/* Slider for common sizes */}
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Quick Size Slider (12px - 200px)</label>
                   <input
@@ -970,12 +1096,19 @@ const SharpTextOverlayController: React.FC<{
                     max="200"
                     step="2"
                     value={Math.min(textOverlay.fontSize, 200)}
-                    onChange={(e) => handlePropertyChange('fontSize', parseInt(e.target.value))}
+                    onChange={(e) => handleFontSizeChange(parseInt(e.target.value))}
                     disabled={disabled}
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
                   />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>12px</span>
+                    <span>50px</span>
+                    <span>100px</span>
+                    <span>200px</span>
+                  </div>
                 </div>
                 
+                {/* Direct input for extreme sizes */}
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Custom Size Input (12px - 1000px)</label>
                   <div className="flex items-center gap-2">
@@ -985,36 +1118,51 @@ const SharpTextOverlayController: React.FC<{
                       max="1000"
                       step="1"
                       value={textOverlay.fontSize}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value);
-                        if (!isNaN(value)) {
-                          const clampedValue = Math.max(12, Math.min(1000, value));
-                          handlePropertyChange('fontSize', clampedValue);
-                        }
-                      }}
+                      onChange={(e) => handleFontSizeChange(e.target.value)}
                       disabled={disabled}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 disabled:opacity-50"
                       placeholder="Font size in pixels"
                     />
                     <span className="text-sm text-gray-500 font-medium">px</span>
                   </div>
                 </div>
                 
+                {/* Quick size presets */}
                 <div className="flex flex-wrap gap-2">
                   {[24, 48, 72, 100, 150, 200, 300, 500, 750, 1000].map(size => (
                     <button
                       key={size}
-                      onClick={() => handlePropertyChange('fontSize', size)}
+                      onClick={() => handleFontSizeChange(size)}
                       disabled={disabled}
                       className={`px-3 py-1 text-xs rounded transition-colors disabled:opacity-50 ${
                         textOverlay.fontSize === size
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-green-600 text-white'
                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
                     >
                       {size}px
                     </button>
                   ))}
+                </div>
+                
+                {/* Size category indicators */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                  <div className="text-center p-2 bg-blue-50 rounded">
+                    <p className="font-medium text-blue-800">12-50px</p>
+                    <p className="text-blue-600">Normal Text</p>
+                  </div>
+                  <div className="text-center p-2 bg-green-50 rounded">
+                    <p className="font-medium text-green-800">50-150px</p>
+                    <p className="text-green-600">Large Text</p>
+                  </div>
+                  <div className="text-center p-2 bg-orange-50 rounded">
+                    <p className="font-medium text-orange-800">150-500px</p>
+                    <p className="text-orange-600">Poster Size</p>
+                  </div>
+                  <div className="text-center p-2 bg-red-50 rounded">
+                    <p className="font-medium text-red-800">500-1000px</p>
+                    <p className="text-red-600">Banner Size</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1030,7 +1178,7 @@ const SharpTextOverlayController: React.FC<{
                 value={textOverlay.fontWeight}
                 onChange={(e) => handlePropertyChange('fontWeight', e.target.value)}
                 disabled={disabled}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 disabled:opacity-50"
               >
                 <option value="normal">Normal</option>
                 <option value="bold">Bold</option>
@@ -1046,7 +1194,7 @@ const SharpTextOverlayController: React.FC<{
                 value={textOverlay.textAlign}
                 onChange={(e) => handlePropertyChange('textAlign', e.target.value)}
                 disabled={disabled}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 disabled:opacity-50"
               >
                 <option value="left">Left</option>
                 <option value="center">Center</option>
@@ -1074,7 +1222,7 @@ const SharpTextOverlayController: React.FC<{
                   value={textOverlay.fontColor}
                   onChange={(e) => handlePropertyChange('fontColor', e.target.value)}
                   disabled={disabled}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 disabled:opacity-50"
                   placeholder="#000000"
                 />
               </div>
@@ -1087,19 +1235,37 @@ const SharpTextOverlayController: React.FC<{
               <div className="flex items-center gap-2">
                 <input
                   type="color"
-                  value={textOverlay.backgroundColor}
-                  onChange={(e) => handlePropertyChange('backgroundColor', e.target.value)}
-                  disabled={disabled}
+                  value={textOverlay.backgroundColor === 'transparent' ? '#FFFFFF' : textOverlay.backgroundColor}
+                  onChange={e => handlePropertyChange('backgroundColor', e.target.value)}
+                  disabled={textOverlay.backgroundOpacity === 0 || textOverlay.backgroundColor === 'transparent'}
                   className="w-12 h-10 border border-gray-300 rounded cursor-pointer disabled:opacity-50"
                 />
                 <input
                   type="text"
                   value={textOverlay.backgroundColor}
-                  onChange={(e) => handlePropertyChange('backgroundColor', e.target.value)}
-                  disabled={disabled}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  onChange={e => handlePropertyChange('backgroundColor', e.target.value)}
+                  disabled={textOverlay.backgroundOpacity === 0 || textOverlay.backgroundColor === 'transparent'}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 disabled:opacity-50"
                   placeholder="#FFFFFF"
                 />
+
+<input
+    type="checkbox"
+    id="noBackground"
+    checked={textOverlay.backgroundOpacity === 0 || textOverlay.backgroundColor === 'transparent'}
+    onChange={e => {
+      if (e.target.checked) {
+        handlePropertyChange('backgroundOpacity', 0);
+        handlePropertyChange('backgroundColor', 'transparent');
+      } else {
+        handlePropertyChange('backgroundOpacity', 0.8);
+        handlePropertyChange('backgroundColor', '#FFFFFF');
+      }
+    }}
+    className="mr-2"
+  />
+  <label htmlFor="noBackground" className="text-sm text-gray-700">No Background</label>
+
               </div>
             </div>
           </div>
@@ -1116,12 +1282,30 @@ const SharpTextOverlayController: React.FC<{
                 max="1"
                 step="0.1"
                 value={textOverlay.backgroundOpacity}
-                onChange={(e) => handlePropertyChange('backgroundOpacity', parseFloat(e.target.value))}
+                onChange={e => handlePropertyChange('backgroundOpacity', parseFloat(e.target.value))}
+                disabled={textOverlay.backgroundOpacity === 0 || textOverlay.backgroundColor === 'transparent'}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+              />
+              {/* Border Radius slider moved here */}
+              <label className="block text-xs font-medium text-gray-700 mb-1 mt-2">
+                Border Radius: {textOverlay.borderRadius}px
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                step="1"
+                value={textOverlay.borderRadius}
+                onChange={(e) => handlePropertyChange('borderRadius', parseInt(e.target.value))}
                 disabled={disabled}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
               />
+              <div className="flex justify-between text-xs text-gray-400 mb-2">
+                <span>0px</span>
+                <span>25px</span>
+                <span>50px</span>
+              </div>
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Padding: {textOverlay.padding}px
@@ -1136,6 +1320,30 @@ const SharpTextOverlayController: React.FC<{
                 disabled={disabled}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
               />
+              <div className="flex justify-between text-xs text-gray-400 mb-2">
+                <span>0px</span>
+                <span>25px</span>
+                <span>50px</span>
+              </div>
+              {/* Slider padding bawah */}
+              <label className="block text-xs font-medium text-gray-700 mb-1 mt-2">
+                Padding Bawah: {typeof textOverlay.paddingBottom === 'number' ? textOverlay.paddingBottom : textOverlay.padding}px
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                step="2"
+                value={typeof textOverlay.paddingBottom === 'number' ? textOverlay.paddingBottom : textOverlay.padding}
+                onChange={e => handlePropertyChange('paddingBottom', Number(e.target.value))}
+                disabled={disabled}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+              />
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>0px</span>
+                <span>25px</span>
+                <span>50px</span>
+              </div>
             </div>
           </div>
 
@@ -1143,7 +1351,7 @@ const SharpTextOverlayController: React.FC<{
           {textOverlay.preset === 'custom' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                Custom Text Position (pixels) - Sharp Range: -10000px to +10000px
+                Custom Text Position (pixels) - Anti-Crop Range: -10000px to +10000px
               </label>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
@@ -1157,7 +1365,7 @@ const SharpTextOverlayController: React.FC<{
                       max="5000"
                       step="50"
                       value={Math.max(-5000, Math.min(5000, textOverlay.offsetX))}
-                      onChange={(e) => handlePropertyChange('offsetX', parseInt(e.target.value))}
+                      onChange={(e) => handleOffsetChange('X', parseInt(e.target.value))}
                       disabled={disabled}
                       className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
                     />
@@ -1167,19 +1375,21 @@ const SharpTextOverlayController: React.FC<{
                       max="10000"
                       step="10"
                       value={textOverlay.offsetX}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value);
-                        if (!isNaN(value)) {
-                          const clampedValue = Math.max(-10000, Math.min(10000, value));
-                          handlePropertyChange('offsetX', clampedValue);
-                        }
-                      }}
+                      onChange={(e) => handleOffsetChange('X', e.target.value)}
                       disabled={disabled}
                       className="w-24 px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-50"
                       placeholder="0"
                     />
                     <span className="text-xs text-gray-500">px</span>
                   </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>-5000 (Far Left)</span>
+                    <span>0 (Left Edge)</span>
+                    <span>+5000 (Far Right)</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Slider: ±5000px, Input: ±10000px untuk positioning ekstrem
+                  </p>
                 </div>
                 
                 <div>
@@ -1193,7 +1403,7 @@ const SharpTextOverlayController: React.FC<{
                       max="5000"
                       step="50"
                       value={Math.max(-5000, Math.min(5000, textOverlay.offsetY))}
-                      onChange={(e) => handlePropertyChange('offsetY', parseInt(e.target.value))}
+                      onChange={(e) => handleOffsetChange('Y', parseInt(e.target.value))}
                       disabled={disabled}
                       className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
                     />
@@ -1203,48 +1413,141 @@ const SharpTextOverlayController: React.FC<{
                       max="10000"
                       step="10"
                       value={textOverlay.offsetY}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value);
-                        if (!isNaN(value)) {
-                          const clampedValue = Math.max(-10000, Math.min(10000, value));
-                          handlePropertyChange('offsetY', clampedValue);
-                        }
-                      }}
+                      onChange={(e) => handleOffsetChange('Y', e.target.value)}
                       disabled={disabled}
                       className="w-24 px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-50"
                       placeholder="0"
                     />
                     <span className="text-xs text-gray-500">px</span>
                   </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>-5000 (Far Up)</span>
+                    <span>0 (Top Edge)</span>
+                    <span>+5000 (Far Down)</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Slider: ±5000px, Input: ±10000px untuk positioning ekstrem
+                  </p>
                 </div>
+              </div>
+              
+              {/* Enhanced Quick Presets for Extreme Positioning */}
+              <div className="mt-4 p-3 bg-green-100 rounded-lg">
+                <p className="text-xs font-medium text-green-800 mb-2">Quick Position Presets (Anti-Crop Extended Range):</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <button
+                    onClick={() => {
+                      handleOffsetChange('X', templateWidth / 2);
+                      handleOffsetChange('Y', 750);
+                    }}
+                    disabled={disabled}
+                    className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50 disabled:opacity-50"
+                  >
+                    Standard (Y: 750)
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleOffsetChange('X', templateWidth / 2);
+                      handleOffsetChange('Y', 1500);
+                    }}
+                    disabled={disabled}
+                    className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50 disabled:opacity-50"
+                  >
+                    Lower (Y: 1500)
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleOffsetChange('X', templateWidth / 2);
+                      handleOffsetChange('Y', 3000);
+                    }}
+                    disabled={disabled}
+                    className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50 disabled:opacity-50"
+                  >
+                    Far Down (Y: 3000)
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleOffsetChange('X', templateWidth / 2);
+                      handleOffsetChange('Y', 5000);
+                    }}
+                    disabled={disabled}
+                    className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50 disabled:opacity-50"
+                  >
+                    Extreme (Y: 5000)
+                  </button>
+                </div>
+                <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <button
+                    onClick={() => {
+                      handleOffsetChange('X', -2000);
+                      handleOffsetChange('Y', templateHeight / 2);
+                    }}
+                    disabled={disabled}
+                    className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50 disabled:opacity-50"
+                  >
+                    Far Left (X: -2000)
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleOffsetChange('X', templateWidth + 2000);
+                      handleOffsetChange('Y', templateHeight / 2);
+                    }}
+                    disabled={disabled}
+                    className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Far Right (X: +{templateWidth + 2000})
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleOffsetChange('X', templateWidth / 2);
+                      handleOffsetChange('Y', -2000);
+                    }}
+                    disabled={disabled}
+                    className="px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50 disabled:opacity-50"
+                  >
+                    Far Up (Y: -2000)
+                  </button>
+                </div>
+              </div>
+              
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-xs text-yellow-800">
+                  <strong>💡 Tips Anti-Cropping Mode:</strong> Gunakan nilai besar (±2000-10000px) untuk positioning di luar template. 
+                  Canvas akan diperluas otomatis untuk menampung text yang keluar bounds. Text tidak akan terpotong!
+                </p>
               </div>
             </div>
           )}
 
-          {/* Sharp Text Overlay Summary */}
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-200">
-            <h4 className="font-medium text-blue-800 mb-2 flex items-center">
-              <Sparkles className="w-4 h-4 mr-2" />
-              Sharp Text Overlay Summary
+          {/* ENHANCED: Text Overlay Summary with Anti-Cropping Info */}
+          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+            <h4 className="font-medium text-green-800 mb-2 flex items-center">
+              <Info className="w-4 h-4 mr-2" />
+              Anti-Crop Text Overlay Summary
             </h4>
-            <div className="grid md:grid-cols-2 gap-4 text-sm text-blue-700">
+            <div className="grid md:grid-cols-2 gap-4 text-sm text-green-700">
               <div>
                 <p><strong>Position:</strong> {presetOptions.find(p => p.value === textOverlay.preset)?.label}</p>
                 <p><strong>Font:</strong> {textOverlay.fontFamily} {textOverlay.fontSize}px {textOverlay.fontWeight}</p>
-                <p><strong>Sharp Quality:</strong> {textOverlay.sharpTextOptions.quality}% with {textOverlay.sharpTextOptions.hinting} hinting</p>
+                <p><strong>Size Category:</strong> {
+                  textOverlay.fontSize <= 50 ? 'Normal (12-50px)' :
+                  textOverlay.fontSize <= 150 ? 'Large (51-150px)' :
+                  textOverlay.fontSize <= 500 ? 'Poster (151-500px)' :
+                  'Banner (501-1000px)'
+                }</p>
                 <p><strong>Anti-Crop:</strong> {textOverlay.descendersSupport ? 'Enabled (y,g,p,q,j safe)' : 'Disabled'}</p>
               </div>
               <div>
                 <p><strong>Colors:</strong> {textOverlay.fontColor} on {textOverlay.backgroundColor}</p>
                 <p><strong>Position:</strong> X:{textOverlay.offsetX}px, Y:{textOverlay.offsetY}px</p>
                 <p><strong>Canvas:</strong> {needsExpansion ? `Will expand to ${canvasExpansion.newWidth}×${canvasExpansion.newHeight}px` : 'Original size maintained'}</p>
-                <p><strong>Processing:</strong> {canvasExpansion.processingComplexity} complexity ({formatMemory(canvasExpansion.memoryEstimate)})</p>
+                <p><strong>Safety Margin:</strong> {textOverlay.extraSafetyMargin}px extra space</p>
               </div>
             </div>
             {(Math.abs(textOverlay.offsetX) > 5000 || Math.abs(textOverlay.offsetY) > 5000 || textOverlay.fontSize > 200) && (
               <div className="mt-2 p-2 bg-blue-100 border border-blue-300 rounded text-xs text-blue-800">
-                <strong>⚡ Sharp Enhanced:</strong> High-quality text rendering dengan anti-aliasing, kerning, dan full hinting support. 
-                Canvas auto-expansion dijamin tidak akan crop text termasuk descender letters!
+                <strong>⚡ Anti-Cropping Active:</strong> Canvas akan diperluas otomatis untuk menampung positioning/font ekstrem. 
+                Text dijamin tidak terpotong termasuk huruf dengan descender (y, g, p, q, j)!
               </div>
             )}
           </div>
@@ -1253,6 +1556,78 @@ const SharpTextOverlayController: React.FC<{
     </div>
   );
 };
+
+// Tambahkan fungsi validasi posisi text overlay
+function clampTextOverlayPosition(
+  textOverlay: TextOverlay,
+  templateWidth: number,
+  templateHeight: number,
+  addToast: (toast: Omit<ToastMessage, 'id'>) => void,
+  sampleText: string = "Amelia Rizky Ramadhan"
+): TextOverlay {
+  // Ukur lebar/tinggi text real pakai canvas
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  let textWidth: number, textHeight: number;
+  if (ctx) {
+    ctx.font = `${textOverlay.fontWeight} ${textOverlay.fontSize}px ${textOverlay.fontFamily}`;
+    const textMetrics = ctx.measureText(sampleText);
+    textWidth = textMetrics.width + textOverlay.padding * 2;
+    textHeight = textOverlay.fontSize * textOverlay.lineHeight + textOverlay.padding * 2;
+  } else {
+    // Fallback jika ctx null
+    textWidth = (textOverlay.fontSize * sampleText.length * 0.6) + textOverlay.padding * 2;
+    textHeight = textOverlay.fontSize * textOverlay.lineHeight + textOverlay.padding * 2;
+  }
+
+  let corrected = false;
+  let newOffsetY = textOverlay.offsetY;
+  let newOffsetX = textOverlay.offsetX;
+
+  // Clamp Y
+  if (textOverlay.offsetY + textHeight > templateHeight) {
+    newOffsetY = Math.max(0, templateHeight - textHeight);
+    corrected = true;
+  }
+  if (textOverlay.offsetY < 0) {
+    newOffsetY = 0;
+    corrected = true;
+  }
+  // Clamp X (center align)
+  if (textOverlay.textAlign === 'center') {
+    if (textOverlay.offsetX - textWidth / 2 < 0) {
+      newOffsetX = textWidth / 2;
+      corrected = true;
+    }
+    if (textOverlay.offsetX + textWidth / 2 > templateWidth) {
+      newOffsetX = templateWidth - textWidth / 2;
+      corrected = true;
+    }
+  } else {
+    if (textOverlay.offsetX + textWidth > templateWidth) {
+      newOffsetX = templateWidth - textWidth;
+      corrected = true;
+    }
+    if (textOverlay.offsetX < 0) {
+      newOffsetX = 0;
+      corrected = true;
+    }
+  }
+
+  if (corrected) {
+    addToast({
+      type: 'warning',
+      title: 'Posisi Text Diperbaiki',
+      message: 'Posisi text overlay otomatis dikoreksi agar tidak keluar dari template.'
+    });
+  }
+
+  return {
+    ...textOverlay,
+    offsetY: newOffsetY,
+    offsetX: newOffsetX
+  };
+}
 
 const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
   isOpen,
@@ -1267,8 +1642,8 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
   const [selectedDivisi, setSelectedDivisi] = useState<string[]>([]);
   const [templateDimensions, setTemplateDimensions] = useState({ width: 800, height: 1200 });
   
-  // Enhanced Settings with Sharp support
-  const [templateSettings, setTemplateSettings] = useState<SharpTemplateSettings>({
+  // FIXED: Settings with fixed QR position (75% scale, 550px Y offset) + Anti-Crop Text
+  const [templateSettings, setTemplateSettings] = useState<TemplateSettings>({
     qrPosition: {
       preset: 'center',
       offsetX: 0,
@@ -1291,35 +1666,22 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
       fontFamily: 'Arial',
       strokeWidth: 0,
       strokeColor: '#FFFFFF',
+      // ENHANCED: Anti-cropping settings
       autoExpandCanvas: true,
       minCanvasExpansion: 50,
       lineHeight: 1.2,
       descendersSupport: true,
-      extraSafetyMargin: 20,
-      sharpTextOptions: {
-        antialias: true,
-        kerning: true,
-        hinting: 'full',
-        quality: 95,
-        dpi: 300
-      }
+      extraSafetyMargin: 20
     },
     canvasExpansion: {
       enabled: true,
       autoCalculate: true,
       minExpansion: 50,
       maxExpansion: 10000
-    },
-    sharpProcessing: {
-      enabled: true,
-      concurrency: 2,
-      memoryLimit: 512 * 1024 * 1024, // 512MB
-      pixelLimit: 100000000, // 100MP
-      qualityMode: 'quality'
     }
   });
   
-  // Progress state with Sharp tracking
+  // Progress state
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress>({
     show: false,
     current: 0,
@@ -1328,10 +1690,7 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
     percentage: 0,
     startTime: 0,
     downloadStarted: false,
-    downloadCompleted: false,
-    sharpProcessed: 0,
-    fallbackProcessed: 0,
-    processingMode: 'sharp'
+    downloadCompleted: false
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1365,7 +1724,7 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
     return { valid: errors.length === 0, errors };
   }, []);
   
-  // Enhanced template file handling with Sharp optimization
+  // ENHANCED: Template file handling with dimension detection
   const handleTemplateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
@@ -1414,7 +1773,7 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
         addToast({
           type: 'success',
           title: 'Template Berhasil Diupload',
-          message: `${selectedFile.name} (${img.width}×${img.height}px) siap untuk Sharp processing`
+          message: `${selectedFile.name} (${img.width}×${img.height}px) siap digunakan dengan QR fixed position & anti-cropping`
         });
       };
       img.src = result;
@@ -1436,7 +1795,7 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
     setDownloadProgress(prev => ({ ...prev, show: false }));
     setTemplateDimensions({ width: 800, height: 1200 });
     
-    // Reset to default settings with FIXED QR position + Sharp enhancements
+    // Reset to default settings with FIXED QR position + Anti-Crop
     setTemplateSettings({
       qrPosition: {
         preset: 'center',
@@ -1464,27 +1823,13 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
         minCanvasExpansion: 50,
         lineHeight: 1.2,
         descendersSupport: true,
-        extraSafetyMargin: 20,
-        sharpTextOptions: {
-          antialias: true,
-          kerning: true,
-          hinting: 'full',
-          quality: 95,
-          dpi: 300
-        }
+        extraSafetyMargin: 20
       },
       canvasExpansion: {
         enabled: true,
         autoCalculate: true,
         minExpansion: 50,
         maxExpansion: 10000
-      },
-      sharpProcessing: {
-        enabled: true,
-        concurrency: 2,
-        memoryLimit: 512 * 1024 * 1024,
-        pixelLimit: 100000000,
-        qualityMode: 'quality'
       }
     });
     
@@ -1494,129 +1839,42 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
     addToast({
       type: 'info',
       title: 'Template Dihapus',
-      message: 'Template dan pengaturan Sharp telah direset (QR tetap fixed 75% scale, Y:550px)'
+      message: 'Template dan pengaturan anti-cropping telah direset (QR tetap fixed 75% scale, Y:550px)'
     });
   }, [addToast]);
 
-  // Enhanced download handler with Sharp processing info
+  // ENHANCED: Download handler with canvas expansion info
   const handleDownload = useCallback(async () => {
     if (!templateFile) {
       addToast({
-        type: 'warning',
+        type: 'error',
         title: 'Template Belum Dipilih',
-        message: 'Upload template terlebih dahulu untuk Sharp processing'
+        message: 'Pilih file template gambar terlebih dahulu.'
       });
       return;
     }
-
     if (selectedDivisi.length === 0) {
       addToast({
-        type: 'warning',
+        type: 'error',
         title: 'Divisi Belum Dipilih',
-        message: 'Pilih minimal 1 divisi untuk Sharp template processing'
+        message: 'Pilih minimal satu divisi.'
       });
       return;
     }
-
-    // Calculate Sharp canvas expansion for confirmation
-    const canvasExpansion = calculateSharpCanvasExpansion(
+    // Validasi posisi text overlay
+    const safeTextOverlay = clampTextOverlayPosition(
+      templateSettings.textOverlay,
       templateDimensions.width,
       templateDimensions.height,
-      templateSettings.textOverlay,
-      "Sample Participant Name with ygpqj"
+      addToast
     );
-
-    const needsExpansion = canvasExpansion.sharpOptimized && 
-      (canvasExpansion.newWidth > templateDimensions.width || canvasExpansion.newHeight > templateDimensions.height);
-
-    // Enhanced confirmation with Sharp processing info
-    const estimatedTime = Math.ceil(totalQRForSelectedDivisi / 3); // Slower due to Sharp processing
-    const estimatedSize = Math.ceil(totalQRForSelectedDivisi * 0.6); // Larger due to quality
-    
-    // FIXED QR info
-    const qrInfo = `Fixed QR: Center position (Y:550px, 75% scale)`;
-      
-    const textInfo = templateSettings.textOverlay.enabled 
-      ? `Sharp Text at X:${templateSettings.textOverlay.offsetX}, Y:${templateSettings.textOverlay.offsetY}px (${templateSettings.textOverlay.fontSize}px ${templateSettings.textOverlay.fontFamily}, ${templateSettings.textOverlay.sharpTextOptions.quality}% quality)`
-      : 'No text overlay';
-
-    const canvasInfo = needsExpansion 
-      ? `Canvas expansion: ${templateDimensions.width}×${templateDimensions.height} → ${canvasExpansion.newWidth}×${canvasExpansion.newHeight}px`
-      : `Canvas: ${templateDimensions.width}×${templateDimensions.height}px (no expansion needed)`;
-
-    const sharpInfo = `Sharp Processing: ${templateSettings.textOverlay.sharpTextOptions.antialias ? 'Anti-aliasing' : 'No AA'}, ${templateSettings.textOverlay.sharpTextOptions.hinting} hinting, ${templateSettings.textOverlay.sharpTextOptions.quality}% quality`;
-    
-    const proceed = confirm(
-      `Download ${totalQRForSelectedDivisi} QR dengan Sharp template processing untuk ${selectedDivisi.length} divisi:\n\n` +
-      `📁 Divisi: ${selectedDivisi.slice(0, 3).join(', ')}${selectedDivisi.length > 3 ? ' dan lainnya...' : ''}\n` +
-      `📍 ${qrInfo}\n` +
-      `📝 Text: ${textInfo}\n` +
-      `🖼️ ${canvasInfo}\n` +
-      `⚡ ${sharpInfo}\n` +
-      `🔄 Processing: ${canvasExpansion.processingComplexity} complexity\n` +
-      `💾 Memory: ~${(canvasExpansion.memoryEstimate / 1024 / 1024).toFixed(1)}MB per image\n` +
-      `⏱️ Estimasi waktu: ${estimatedTime} detik\n` +
-      `📦 Estimasi ukuran: ~${estimatedSize} MB\n\n` +
-      `Lanjutkan dengan Sharp processing?`
-    );
-    
-    if (!proceed) return;
-
-    // Initialize progress with Sharp tracking
-    setDownloadProgress({
-      show: true,
-      current: 0,
-      total: totalQRForSelectedDivisi,
-      stage: 'Memulai Sharp template processing dengan enhanced text rendering...',
-      percentage: 0,
-      startTime: Date.now(),
-      downloadStarted: false,
-      downloadCompleted: false,
-      sharpProcessed: 0,
-      fallbackProcessed: 0,
-      processingMode: 'sharp',
-      memoryUsage: canvasExpansion.memoryEstimate
-    });
-
-    try {
-      abortControllerRef.current = new AbortController();
-      
-      // Update progress
-      setDownloadProgress(prev => ({
-        ...prev,
-        stage: 'Mengirim template dan konfigurasi Sharp ke server...',
-        percentage: 5
-      }));
-      
-      // Call the onDownload callback with Sharp template settings
-      await onDownload(templateFile, selectedDivisi, templateSettings);
-      
-      // Complete progress
-      setDownloadProgress(prev => ({
-        ...prev,
-        percentage: 100,
-        stage: 'Sharp processing selesai! High-quality text rendering dengan anti-aliasing completed.',
-        downloadCompleted: true
-      }));
-      
-    } catch (error: any) {
-      setDownloadProgress(prev => ({ ...prev, show: false }));
-      
-      if (error.name === 'AbortError') {
-        addToast({
-          type: 'error',
-          title: 'Download Dibatalkan',
-          message: 'Sharp processing dibatalkan oleh user'
-        });
-      } else {
-        addToast({
-          type: 'error',
-          title: 'Sharp Template Processing Gagal',
-          message: error.message || 'Error saat Sharp processing template'
-        });
-      }
-    }
-  }, [templateFile, selectedDivisi, totalQRForSelectedDivisi, templateSettings, templateDimensions, addToast, onDownload]);
+    // Kirim setting yang sudah divalidasi
+    const safeSettings = {
+      ...templateSettings,
+      textOverlay: safeTextOverlay
+    };
+    await onDownload(templateFile, selectedDivisi, safeSettings);
+  }, [templateFile, selectedDivisi, templateSettings, templateDimensions, addToast, onDownload]);
 
   const handleClose = useCallback(() => {
     // Cancel any ongoing request
@@ -1639,7 +1897,7 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
     addToast({
       type: 'info',
       title: 'Download Dibatalkan',
-      message: 'Sharp template processing telah dibatalkan'
+      message: 'Anti-crop template processing telah dibatalkan'
     });
   }, [addToast]);
 
@@ -1665,6 +1923,48 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
     };
   }, []);
 
+  // Tambahkan state untuk validasi preview
+  const [previewValid, setPreviewValid] = useState(true);
+
+  // Tambahkan daftar preset posisi QR code
+  const qrPresetOptions = [
+    { value: 'center', label: 'Center' },
+    { value: 'top-left', label: 'Top Left' },
+    { value: 'top-right', label: 'Top Right' },
+    { value: 'bottom-left', label: 'Bottom Left' },
+    { value: 'bottom-right', label: 'Bottom Right' },
+    { value: 'top-center', label: 'Top Center' },
+    { value: 'bottom-center', label: 'Bottom Center' },
+    { value: 'left-center', label: 'Left Center' },
+    { value: 'right-center', label: 'Right Center' },
+    { value: 'custom', label: 'Custom' },
+  ];
+
+  // Tambahkan handler untuk preset QR
+  const handleQRPositionPresetChange = (preset: string) => {
+    let defaultOffsets = { offsetX: 0, offsetY: 0 };
+    switch (preset) {
+      case 'center': defaultOffsets = { offsetX: 0, offsetY: 0 }; break;
+      case 'top-left': defaultOffsets = { offsetX: -templateDimensions.width/2 + 100, offsetY: -templateDimensions.height/2 + 100 }; break;
+      case 'top-right': defaultOffsets = { offsetX: templateDimensions.width/2 - 100, offsetY: -templateDimensions.height/2 + 100 }; break;
+      case 'bottom-left': defaultOffsets = { offsetX: -templateDimensions.width/2 + 100, offsetY: templateDimensions.height/2 - 100 }; break;
+      case 'bottom-right': defaultOffsets = { offsetX: templateDimensions.width/2 - 100, offsetY: templateDimensions.height/2 - 100 }; break;
+      case 'top-center': defaultOffsets = { offsetX: 0, offsetY: -templateDimensions.height/2 + 100 }; break;
+      case 'bottom-center': defaultOffsets = { offsetX: 0, offsetY: templateDimensions.height/2 - 100 }; break;
+      case 'left-center': defaultOffsets = { offsetX: -templateDimensions.width/2 + 100, offsetY: 0 }; break;
+      case 'right-center': defaultOffsets = { offsetX: templateDimensions.width/2 - 100, offsetY: 0 }; break;
+      case 'custom': defaultOffsets = { offsetX: templateSettings.qrPosition.offsetX, offsetY: templateSettings.qrPosition.offsetY }; break;
+    }
+    setTemplateSettings(prev => ({
+      ...prev,
+      qrPosition: {
+        ...prev.qrPosition,
+        preset,
+        ...defaultOffsets
+      }
+    }));
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -1674,8 +1974,14 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-              <Sparkles className="mr-3 text-purple-600" size={28} />
-              Sharp QR Template Processing + Enhanced Text Rendering
+              <QrCode className="mr-3 text-purple-600" size={28} />
+              Download QR dengan Template + Anti-Crop Text (Fixed QR + No Text Cutting)
+              <span className="ml-3 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                📍 QR Fixed 75%
+              </span>
+              <span className="ml-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                🛡️ Anti-Crop Text
+              </span>
             </h2>
             <button
               onClick={handleClose}
@@ -1685,15 +1991,19 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
               <X size={24} />
             </button>
           </div>
+          <p className="text-gray-600 mt-2">
+            Upload template, atur anti-crop text overlay nama peserta. QR Code fixed pada posisi center dengan scale 75% dan Y offset 550px. 
+            Text tidak akan terpotong termasuk huruf y, g, p, q, j.
+          </p>
         </div>
 
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* Template Upload Section */}
-          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
+          <div className="bg-gray-50 rounded-lg p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center">
               <Upload className="mr-2 text-blue-600" size={20} />
-              Upload Template untuk Sharp Processing (PNG, JPG, JPEG) - Max 15MB
+              Upload Template (PNG, JPG, JPEG) - Max 15MB
             </h3>
             
             <input
@@ -1728,24 +2038,24 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
               </div>
             )}
 
-            {/* Enhanced Template Requirements for Sharp */}
+            {/* Enhanced Template Requirements */}
             <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <h4 className="font-medium text-blue-800 mb-2 flex items-center">
-                <Cpu className="w-4 h-4 mr-2" />
-                Sharp Template Requirements (Fixed QR + Enhanced Text)
+                <Info className="w-4 h-4 mr-2" />
+                Template Requirements (Fixed QR + Anti-Crop Mode)
               </h4>
               <div className="grid md:grid-cols-2 gap-4 text-sm text-blue-700">
                 <ul className="space-y-1">
-                  <li>• Format: PNG, JPG, JPEG (optimized for Sharp)</li>
+                  <li>• Format: PNG, JPG, JPEG</li>
                   <li>• Ukuran: 10KB - 15MB</li>
                   <li>• QR: Fixed center position (75% scale, Y:550px)</li>
-                  <li>• Text: Sharp-enhanced rendering dengan anti-aliasing</li>
+                  <li>• Text positioning: Custom dengan anti-crop</li>
                 </ul>
                 <ul className="space-y-1">
                   <li>• Rasio: Portrait 9:16 direkomendasikan</li>
                   <li>• Resolusi minimal: 720x1280px</li>
-                  <li>• Quality: High-res output dengan kerning support</li>
-                  <li>• Canvas: Auto-expansion untuk positioning ekstrem</li>
+                  <li>• Nama peserta tidak akan terpotong (y,g,p,q,j)</li>
+                  <li>• Canvas auto-expansion untuk text ekstrem</li>
                 </ul>
               </div>
             </div>
@@ -1754,15 +2064,12 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
           {/* Template Preview */}
           {templatePreview && (
             <div className="bg-gray-50 rounded-lg p-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <Eye className="mr-2 text-purple-600" size={20} />
-                Sharp Template Preview:
-              </h3>
+              <h3 className="text-lg font-semibold mb-4">Preview Template:</h3>
               <div className="flex justify-center">
                 <div className="relative">
                   <img
                     src={templatePreview}
-                    alt="Sharp Template Preview"
+                    alt="Template Preview"
                     width={200}
                     height={300}
                     className="border border-gray-300 rounded-lg shadow-lg"
@@ -1772,18 +2079,18 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
               <p className="text-sm text-gray-600 text-center mt-3">
                 QR akan ditempatkan pada posisi <strong>center fixed</strong> dengan ukuran <strong>75%</strong> dan Y offset <strong>550px</strong>
                 {templateSettings.textOverlay.enabled && (
-                  <span>, Nama peserta akan di-render dengan <strong>Sharp high-quality</strong> pada X:{templateSettings.textOverlay.offsetX}, Y:<strong>{templateSettings.textOverlay.offsetY}px</strong> dengan anti-aliasing dan kerning</span>
+                  <span>, Nama peserta pada X:{templateSettings.textOverlay.offsetX}, Y:<strong>{templateSettings.textOverlay.offsetY}px</strong> (Anti-Crop Mode - huruf y,g,p,q,j tidak terpotong)</span>
                 )}
               </p>
             </div>
           )}
 
-          {/* FIXED QR Position Info with Sharp enhancement */}
+          {/* FIXED QR Position Info */}
           {templateFile && (
             <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
               <h3 className="text-lg font-semibold mb-4 flex items-center">
                 <QrCode className="mr-2 text-blue-600" size={20} />
-                QR Code Settings (Fixed Position - Sharp Optimized)
+                QR Code Settings (Fixed Position)
                 <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
                   Non-Configurable
                 </span>
@@ -1804,16 +2111,16 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
               </div>
               <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
                 <p className="text-xs text-blue-800">
-                  <strong>⚡ Sharp Enhancement:</strong> QR position tetap fixed untuk konsistensi, 
-                  namun kualitas rendering ditingkatkan dengan Sharp processing untuk hasil yang lebih crisp dan professional.
+                  <strong>ℹ️ Info:</strong> QR Code position dan scale telah ditetapkan secara permanen untuk konsistensi. 
+                  Anda hanya perlu mengatur anti-crop text overlay nama peserta di bawah.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Enhanced Sharp Text Overlay Controller */}
+          {/* ENHANCED: Anti-Crop Text Overlay Controller */}
           {templateFile && (
-            <SharpTextOverlayController
+            <TextOverlayControllerAntiCrop
               textOverlay={templateSettings.textOverlay}
               onTextOverlayChange={(textOverlay) => setTemplateSettings(prev => ({ ...prev, textOverlay }))}
               disabled={downloadProgress.show}
@@ -1826,7 +2133,7 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
           <div className="bg-gray-50 rounded-lg p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center">
               <Award className="mr-2 text-purple-600" size={20} />
-              Pilih Divisi untuk Sharp Template Processing (Max {MAX_DIVISI_TEMPLATE})
+              Pilih Divisi untuk Anti-Crop Template Processing (Max {MAX_DIVISI_TEMPLATE})
             </h3>
             
             <DivisiSelector
@@ -1842,10 +2149,10 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-blue-800">
-                      {selectedDivisi.length} divisi dipilih untuk Sharp processing
+                      {selectedDivisi.length} divisi dipilih
                     </p>
                     <p className="text-xs text-blue-600">
-                      Total QR: {totalQRForSelectedDivisi} | Estimasi: {Math.ceil(totalQRForSelectedDivisi / 3)} detik (Sharp high-quality rendering)
+                      Total QR: {totalQRForSelectedDivisi} | Estimasi: {Math.ceil(totalQRForSelectedDivisi / 4)} detik (dengan fixed QR + anti-crop text rendering)
                     </p>
                   </div>
                   <button
@@ -1860,11 +2167,11 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
             )}
           </div>
 
-          {/* Enhanced Sharp Processing Info */}
-          <div className="bg-gradient-to-br from-green-50 to-blue-50 rounded-lg p-6 border border-green-200">
+          {/* ENHANCED: Processing Info with Fixed QR + Anti-Cropping */}
+          <div className="bg-green-50 rounded-lg p-6 border border-green-200">
             <h3 className="font-medium text-green-800 mb-3 flex items-center">
-              <Sparkles className="w-5 h-5 mr-2" />
-              Sharp Enhanced Template Processing Features
+              <Layers className="w-5 h-5 mr-2" />
+              Enhanced Anti-Crop Template Processing Features (Fixed QR + No Text Cutting)
             </h3>
             <div className="grid md:grid-cols-2 gap-4 text-sm text-green-700">
               <ul className="space-y-2">
@@ -1874,33 +2181,33 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Sharp text rendering: High-quality anti-aliasing
+                  Anti-crop text: Nama peserta tidak terpotong
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Kerning support: Professional letter spacing
+                  Descender support: y, g, p, q, j lengkap
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  ⚡ Full hinting: Crisp text edges
+                  🛡️ Canvas auto-expansion: Text tidak akan crop
                 </li>
               </ul>
               <ul className="space-y-2">
                 <li className="flex items-center">
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Quality control: 60%-100% adjustable
+                  Font customization: Size 12px-1000px
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Descender protection: y, g, p, q, j safe
+                  Extreme positioning: ±10000px range
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Memory optimization: Efficient processing
+                  Multi-divisi processing: Batch download
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  🔥 Canvas expansion: Unlimited positioning
+                  📍 Konsistensi QR: Position & scale tetap
                 </li>
               </ul>
             </div>
@@ -1908,42 +2215,109 @@ const DownloadQRTemplate: React.FC<DownloadQRTemplateProps> = ({
 
           {/* Download Progress */}
           {downloadProgress.show && (
-            <SharpProgressBar
+            <ProgressBar
               progress={downloadProgress}
               onCancel={downloadProgress.downloadCompleted ? undefined : cancelDownload}
             />
           )}
 
-          {/* Enhanced Download Section */}
-          <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-200">
+          {/* Download Section */}
+          <div className="bg-purple-50 rounded-lg p-6 border border-purple-200">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-purple-800 mb-2 flex items-center">
-                  <Cpu className="mr-2" size={20} />
-                  Ready untuk Sharp Template QR Processing?
+                <h3 className="text-lg font-semibold text-purple-800 mb-2">
+                  Ready untuk Download Anti-Crop Template QR?
                 </h3>
                 <p className="text-sm text-purple-600">
-                  QR Fixed Position (Center 75% Y:550px) + Sharp enhanced text rendering untuk {selectedDivisi.length} divisi ({totalQRForSelectedDivisi} QR).
-                  High-quality output dengan anti-aliasing, kerning, dan full hinting support!
+                  QR Fixed Position (Center 75% Y:550px) + Anti-crop text overlay untuk {selectedDivisi.length} divisi ({totalQRForSelectedDivisi} QR).
+                  Huruf y, g, p, q, j dijamin tidak terpotong!
                 </p>
               </div>
               <button
                 onClick={handleDownload}
-                disabled={!templateFile || selectedDivisi.length === 0 || downloadProgress.show || isLoading}
-                className="flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-lg"
+                disabled={!templateFile || selectedDivisi.length === 0 || downloadProgress.show || isLoading || !previewValid}
+                className="flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
               >
                 {downloadProgress.show ? (
                   <>
                     <LoadingSpinner size="sm" />
-                    <span className="ml-2">Sharp Processing...</span>
+                    <span className="ml-2">Processing...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="mr-2" size={20} />
-                    Download Sharp Template QR
+                    <Download className="mr-2" size={20} />
+                    Download Anti-Crop Template QR
                   </>
                 )}
               </button>
+            </div>
+          </div>
+
+          {templatePreview && (
+            <div className="mb-6">
+              <h4 className="font-semibold mb-2">Preview Template + QR + Text Overlay</h4>
+              <QRTemplatePreview
+                templateImg={templatePreview}
+                qrSettings={templateSettings.qrPosition}
+                textOverlaySettings={templateSettings.textOverlay}
+                namaPeserta={"Contoh Nama Peserta"}
+                width={templateDimensions.width}
+                height={templateDimensions.height}
+                onValidChange={setPreviewValid}
+              />
+              {!previewValid && (
+                <div className="mt-2 text-red-600 font-semibold">Posisi text overlay keluar area template! Perbaiki posisi sebelum download.</div>
+              )}
+        </div>
+          )}
+
+          {/* Tambahkan UI untuk preset QR */}
+          <div className="bg-gray-50 rounded-lg p-6 mb-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center">
+              <QrCode className="mr-2 text-blue-600" size={20} />
+              QR Code Position Preset
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Preset</label>
+                <select
+                  value={templateSettings.qrPosition.preset}
+                  onChange={e => handleQRPositionPresetChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  {qrPresetOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              {templateSettings.qrPosition.preset === 'custom' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Offset X</label>
+                    <input
+                      type="number"
+                      value={templateSettings.qrPosition.offsetX}
+                      onChange={e => setTemplateSettings(prev => ({
+                        ...prev,
+                        qrPosition: { ...prev.qrPosition, offsetX: parseInt(e.target.value) || 0 }
+                      }))}
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Offset Y</label>
+                    <input
+                      type="number"
+                      value={templateSettings.qrPosition.offsetY}
+                      onChange={e => setTemplateSettings(prev => ({
+                        ...prev,
+                        qrPosition: { ...prev.qrPosition, offsetY: parseInt(e.target.value) || 0 }
+                      }))}
+                      className="w-full px-2 py-1 border border-gray-300 rounded"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
