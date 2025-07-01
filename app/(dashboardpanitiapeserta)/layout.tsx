@@ -78,16 +78,16 @@ const EnhancedProfileAvatar = ({
   )
 }
 
-export default function PanelLayout({
-  children,
-}: {
+interface DashboardPanitiaPesertaLayoutProps {
   children: React.ReactNode
-}) {
+}
+
+function DashboardPanitiaPesertaLayout({ children }: DashboardPanitiaPesertaLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const { userData, loading, error } = useUser()
   const router = useRouter()
-  
+
   const handleToggle = useCallback((open: boolean) => setSidebarOpen(open), [])
   const handleClose = useCallback(() => setSidebarOpen(false), [])
 
@@ -165,9 +165,17 @@ export default function PanelLayout({
     )
   }
 
-  // Cek apakah user adalah dari divisi PIT
+  // Cek apakah user adalah dari divisi PIT - DITAMBAHKAN LOGIC INI!
   const isPITUser = userData?.isPIT === true
-  
+
+  console.log('🔍 Dashboard Panitia Layout Debug:', {
+    userData: userData,
+    isPIT: userData?.isPIT,
+    divisi_id: userData?.divisi_id,
+    divisi_nama: userData?.divisi_nama,
+    isPITUser: isPITUser
+  })
+
   return (
     <div className="relative flex min-h-screen bg-gray-50">
       {/* ─── Sidebar (hanya tampil jika user PIT) ─── */}
@@ -179,8 +187,13 @@ export default function PanelLayout({
       <div className="flex flex-col flex-1">
         {/* Header mobile (hanya tampil jika user PIT) */}
         {isPITUser && (
-          <div className="sticky top-0 z-40 lg:hidden h-14 w-full flex items-center gap-2
-                           bg-gray-50/95 backdrop-blur border-b border-gray-200">
+          <div className="sticky top-0 z-40 lg:hidden h-14 w-full flex items-center gap-2"
+               style={{
+                 background: 'rgba(249, 250, 251, 0.95)',
+                 backdropFilter: 'blur(8px)',
+                 borderBottomColor: 'rgba(72, 145, 161, 0.2)'
+               }}
+               className="border-b">
             {/* Burger */}
             <button
               aria-label="Buka sidebar"
@@ -198,16 +211,7 @@ export default function PanelLayout({
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-
-            {/* Logo di tengah */}
             <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" 
-                   style={{ backgroundColor: '#4891A1' }}>
-                <span className="text-white font-bold text-sm">RB</span>
-              </div>
-              <span className="text-base font-semibold text-gray-800">
-                RAJA Brawijaya
-              </span>
             </div>
           </div>
         )}
@@ -239,16 +243,6 @@ export default function PanelLayout({
                       </p>
                       <p className="text-xs text-gray-600">
                         {userData.jabatan_nama} - {userData.divisi_nama}
-                        {isPITUser && (
-                          <span className="ml-2 px-2 py-1 rounded-full text-xs font-medium"
-                                style={{
-                                  backgroundColor: 'rgba(72, 145, 161, 0.1)',
-                                  color: '#4891A1',
-                                  border: '1px solid rgba(72, 145, 161, 0.3)'
-                                }}>
-                            PIT
-                          </span>
-                        )}
                       </p>
                     </div>
                   </div>
@@ -314,3 +308,6 @@ export default function PanelLayout({
     </div>
   )
 }
+
+// Export default yang benar
+export default DashboardPanitiaPesertaLayout

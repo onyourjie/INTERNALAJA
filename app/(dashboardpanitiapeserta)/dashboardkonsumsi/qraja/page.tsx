@@ -998,7 +998,7 @@ export default function QRScannerKonsumsiPage() {
               }
             >
               {dateValidation.isValid 
-                ? "⚡ ULTRA-FAST SCAN" 
+                ? "⚡ MULAI SCAN" 
                 : dateValidation.isExpired 
                 ? "⏰ Kadaluarsa" 
                 : "🚀 Belum Dimulai"}

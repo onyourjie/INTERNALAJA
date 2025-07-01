@@ -21,7 +21,7 @@ export async function GET() {
     if (!session?.user?.email) {
       console.log("❌ Debug: No session or email found");
       return NextResponse.json(
-        { error: "Unauthorized", redirectTo: "/login" },
+        { error: "Unauthorized", redirectTo: "/" },
         { status: 401 }
       );
     }
@@ -46,7 +46,7 @@ export async function GET() {
     if (!rows || rows.length === 0) {
       console.log("❌ Debug: User not found in panitia table");
       return NextResponse.json(
-        { error: "User not found in panitia table", redirectTo: "/login" },
+        { error: "User not found in panitia table", redirectTo: "/" },
         { status: 404 }
       );
     }

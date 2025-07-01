@@ -774,7 +774,7 @@ export default function DashboardKestari() {
           
           <div className="flex gap-3">
             {/* Debug Toggle */}
-            <button
+            {/* <button
               onClick={() => setShowDebug(!showDebug)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                 showDebug 
@@ -785,7 +785,7 @@ export default function DashboardKestari() {
             >
               <Bug size={16} />
               Debug {showDebug ? 'ON' : 'OFF'}
-            </button>
+            </button> */}
             
             {/* Refresh Button */}
             <button

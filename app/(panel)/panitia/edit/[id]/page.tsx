@@ -1,4 +1,3 @@
-// File: app/(panel)/panitia/edit/[id]/page.tsx
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'

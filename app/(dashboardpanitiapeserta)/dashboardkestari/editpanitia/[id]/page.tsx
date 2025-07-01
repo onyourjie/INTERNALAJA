@@ -1,4 +1,3 @@
-// FINAL VERSION: app/(panel)/dashboardkestari/editpanitia/[id]/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'

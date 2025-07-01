@@ -80,11 +80,15 @@ interface Statistics {
 export default function DashboardKonsumsi() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [selectedKegiatan, setSelectedKegiatan] = useState("");
-  const [selectedKegiatanId, setSelectedKegiatanId] = useState<number | null>(null);
+  const [selectedKegiatanId, setSelectedKegiatanId] = useState<number | null>(
+    null
+  );
   const [selectedDay, setSelectedDay] = useState("");
-  const [selectedRangkaianId, setSelectedRangkaianId] = useState<number | null>(null);
+  const [selectedRangkaianId, setSelectedRangkaianId] = useState<number | null>(
+    null
+  );
   const [selectedDate, setSelectedDate] = useState("");
   const [showKegiatanDropdown, setShowKegiatanDropdown] = useState(false);
   const [showDayDropdown, setShowDayDropdown] = useState(false);
@@ -94,7 +98,9 @@ export default function DashboardKonsumsi() {
   const [activeCardFilter, setActiveCardFilter] = useState("semua");
   const [kegiatanList, setKegiatanList] = useState<KegiatanData[]>([]);
   const [allKonsumsiData, setAllKonsumsiData] = useState<KonsumsiData[]>([]);
-  const [filteredKonsumsiData, setFilteredKonsumsiData] = useState<KonsumsiData[]>([]);
+  const [filteredKonsumsiData, setFilteredKonsumsiData] = useState<
+    KonsumsiData[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -116,7 +122,10 @@ export default function DashboardKonsumsi() {
   });
 
   // Sorting state
-  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  } | null>(null);
 
   // Helper function untuk mengecek apakah kegiatan adalah single event
   const isSingleEvent = () => {
@@ -127,7 +136,7 @@ export default function DashboardKonsumsi() {
   // ===== NEW: URL State Management Functions =====
   const updateURLParams = useCallback((params: Record<string, string>) => {
     const url = new URL(window.location.href);
-    
+
     // Update atau hapus parameter
     Object.entries(params).forEach(([key, value]) => {
       if (value && value !== "" && value !== "null") {
@@ -136,66 +145,72 @@ export default function DashboardKonsumsi() {
         url.searchParams.delete(key);
       }
     });
-    
+
     // Update URL tanpa reload
-    window.history.replaceState({}, '', url.toString());
+    window.history.replaceState({}, "", url.toString());
   }, []);
 
   // Restore state dari URL parameters
   const restoreStateFromURL = useCallback(() => {
-    const urlKegiatanId = searchParams.get('kegiatanId');
-    const urlKegiatanNama = searchParams.get('kegiatanNama');
-    const urlDayName = searchParams.get('dayName');
-    const urlRangkaianId = searchParams.get('rangkaianId');
-    const urlDate = searchParams.get('date');
+    const urlKegiatanId = searchParams.get("kegiatanId");
+    const urlKegiatanNama = searchParams.get("kegiatanNama");
+    const urlDayName = searchParams.get("dayName");
+    const urlRangkaianId = searchParams.get("rangkaianId");
+    const urlDate = searchParams.get("date");
 
-    console.log('🔄 Restoring konsumsi state from URL:', {
+    console.log("🔄 Restoring konsumsi state from URL:", {
       kegiatanId: urlKegiatanId,
       kegiatanNama: urlKegiatanNama,
       dayName: urlDayName,
       rangkaianId: urlRangkaianId,
-      date: urlDate
+      date: urlDate,
     });
 
     return {
       kegiatanId: urlKegiatanId ? parseInt(urlKegiatanId) : null,
       kegiatanNama: urlKegiatanNama ? decodeURIComponent(urlKegiatanNama) : "",
       dayName: urlDayName ? decodeURIComponent(urlDayName) : "",
-      rangkaianId: urlRangkaianId && urlRangkaianId !== "null" ? parseInt(urlRangkaianId) : null,
-      date: urlDate ? decodeURIComponent(urlDate) : ""
+      rangkaianId:
+        urlRangkaianId && urlRangkaianId !== "null"
+          ? parseInt(urlRangkaianId)
+          : null,
+      date: urlDate ? decodeURIComponent(urlDate) : "",
     };
   }, [searchParams]);
 
   // Group data by panitia_id
   const groupedData = Object.values(
-    filteredKonsumsiData.reduce((acc: Record<number, any>, item: KonsumsiData) => {
-      if (!acc[item.panitia_id]) {
-        acc[item.panitia_id] = {
-          panitia_id: item.panitia_id,
-          nim: item.nim,
-          nama_lengkap: item.nama_lengkap,
-          divisi: item.divisi,
-          konsumsi_1: null,
-          konsumsi_2: null
-        };
-      }
-      if (item.jenis_konsumsi === 'konsumsi_1') {
-        acc[item.panitia_id].konsumsi_1 = item;
-      } else {
-        acc[item.panitia_id].konsumsi_2 = item;
-      }
-      return acc;
-    }, {} as Record<number, any>)
+    filteredKonsumsiData.reduce(
+      (acc: Record<number, any>, item: KonsumsiData) => {
+        if (!acc[item.panitia_id]) {
+          acc[item.panitia_id] = {
+            panitia_id: item.panitia_id,
+            nim: item.nim,
+            nama_lengkap: item.nama_lengkap,
+            divisi: item.divisi,
+            konsumsi_1: null,
+            konsumsi_2: null,
+          };
+        }
+        if (item.jenis_konsumsi === "konsumsi_1") {
+          acc[item.panitia_id].konsumsi_1 = item;
+        } else {
+          acc[item.panitia_id].konsumsi_2 = item;
+        }
+        return acc;
+      },
+      {} as Record<number, any>
+    )
   );
 
   // Sorting handler (group level)
   const handleSort = (key: string) => {
-    if (key === 'nim') return; // NIM tidak bisa di-sort
+    if (key === "nim") return; // NIM tidak bisa di-sort
     setSortConfig((prev) => {
       if (prev && prev.key === key) {
-        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
       }
-      return { key, direction: 'asc' };
+      return { key, direction: "asc" };
     });
   };
 
@@ -204,15 +219,15 @@ export default function DashboardKonsumsi() {
   if (sortConfig) {
     sortedGroups.sort((a, b) => {
       // Untuk konsumsi_1 dan konsumsi_2, sort by status_pengambilan ("sudah_diambil" > "belum_diambil" ASC)
-      if (sortConfig.key === 'konsumsi_1' || sortConfig.key === 'konsumsi_2') {
-        const statusA = a[sortConfig.key]?.status_pengambilan || '';
-        const statusB = b[sortConfig.key]?.status_pengambilan || '';
+      if (sortConfig.key === "konsumsi_1" || sortConfig.key === "konsumsi_2") {
+        const statusA = a[sortConfig.key]?.status_pengambilan || "";
+        const statusB = b[sortConfig.key]?.status_pengambilan || "";
         // ASC: Sudah diambil di atas, DESC: Belum diambil di atas
         if (statusA !== statusB) {
-          if (sortConfig.direction === 'asc') {
-            return statusA === 'sudah_diambil' ? -1 : 1;
+          if (sortConfig.direction === "asc") {
+            return statusA === "sudah_diambil" ? -1 : 1;
           } else {
-            return statusA === 'sudah_diambil' ? 1 : -1;
+            return statusA === "sudah_diambil" ? 1 : -1;
           }
         }
         // Jika status sama, urutkan nama
@@ -221,13 +236,13 @@ export default function DashboardKonsumsi() {
       // Default: string/number
       let aVal = a[sortConfig.key];
       let bVal = b[sortConfig.key];
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortConfig.direction === 'asc'
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        return sortConfig.direction === "asc"
           ? aVal.localeCompare(bVal)
           : bVal.localeCompare(aVal);
       }
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal;
       }
       return 0;
     });
@@ -282,26 +297,28 @@ export default function DashboardKonsumsi() {
 
   // Auto refresh detection dari edit success
   useEffect(() => {
-    const editSuccess = searchParams.get('edit');
-    const timestamp = searchParams.get('t');
-    
-    if (editSuccess === 'success') {
-      console.log('🔄 Detected konsumsi edit success, triggering auto refresh...');
-      
+    const editSuccess = searchParams.get("edit");
+    const timestamp = searchParams.get("t");
+
+    if (editSuccess === "success") {
+      console.log(
+        "🔄 Detected konsumsi edit success, triggering auto refresh..."
+      );
+
       // Force refresh data setelah edit berhasil
       if (selectedKegiatanId && selectedDate) {
         setTimeout(() => {
-          setRefreshKey(prev => prev + 1);
+          setRefreshKey((prev) => prev + 1);
           fetchKonsumsiData(true);
         }, 100);
       }
-      
+
       // Clean query parameters dari URL
       const url = new URL(window.location.href);
-      url.searchParams.delete('edit');
-      url.searchParams.delete('t');
-      window.history.replaceState({}, '', url.toString());
-      
+      url.searchParams.delete("edit");
+      url.searchParams.delete("t");
+      window.history.replaceState({}, "", url.toString());
+
       // Show success notification
       setTimeout(() => {
         showSuccessNotification();
@@ -311,7 +328,7 @@ export default function DashboardKonsumsi() {
 
   // Success notification helper
   const showSuccessNotification = () => {
-    const notification = document.createElement('div');
+    const notification = document.createElement("div");
     notification.innerHTML = `
       <div style="
         position: fixed; 
@@ -342,10 +359,10 @@ export default function DashboardKonsumsi() {
       </style>
     `;
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
       if (notification.parentNode) {
-        notification.style.animation = 'slideIn 0.3s ease-out reverse';
+        notification.style.animation = "slideIn 0.3s ease-out reverse";
         setTimeout(() => {
           if (notification.parentNode) {
             notification.parentNode.removeChild(notification);
@@ -357,10 +374,24 @@ export default function DashboardKonsumsi() {
 
   const resetStats = () => {
     setStats({
-      konsumsi_1: { total: 0, sudah_diambil: 0, belum_diambil: 0, persentase: 0 },
-      konsumsi_2: { total: 0, sudah_diambil: 0, belum_diambil: 0, persentase: 0 },
+      konsumsi_1: {
+        total: 0,
+        sudah_diambil: 0,
+        belum_diambil: 0,
+        persentase: 0,
+      },
+      konsumsi_2: {
+        total: 0,
+        sudah_diambil: 0,
+        belum_diambil: 0,
+        persentase: 0,
+      },
     });
-    setMeta({ total_panitia_eligible: 0, divisi_included: [], is_semua_divisi: false });
+    setMeta({
+      total_panitia_eligible: 0,
+      divisi_included: [],
+      is_semua_divisi: false,
+    });
   };
 
   // ===== MODIFIED: Fetch kegiatan dengan state restoration =====
@@ -372,37 +403,39 @@ export default function DashboardKonsumsi() {
       const j = await res.json();
       if (j.success && j.data.length) {
         setKegiatanList(j.data);
-        
+
         // Coba restore state dari URL dulu
         const urlState = restoreStateFromURL();
-        
+
         if (urlState.kegiatanId && urlState.kegiatanNama) {
           // Restore state dari URL
-          const kegiatan = j.data.find((k: KegiatanData) => k.id === urlState.kegiatanId);
-          
+          const kegiatan = j.data.find(
+            (k: KegiatanData) => k.id === urlState.kegiatanId
+          );
+
           if (kegiatan) {
-            console.log('✅ Restoring konsumsi state from URL:', urlState);
-            
+            console.log("✅ Restoring konsumsi state from URL:", urlState);
+
             setSelectedKegiatan(urlState.kegiatanNama);
             setSelectedKegiatanId(urlState.kegiatanId);
             setSelectedDay(urlState.dayName);
             setSelectedRangkaianId(urlState.rangkaianId);
             setSelectedDate(urlState.date);
-            
+
             setIsLoading(false);
             return; // Skip auto-select jika berhasil restore
           }
         }
-        
+
         // Auto select first kegiatan jika tidak ada state di URL
         const k = j.data[0];
         setSelectedKegiatan(k.nama);
         setSelectedKegiatanId(k.id);
-        
+
         let dayName = "";
         let rangkaianId = null;
         let date = "";
-        
+
         if (k.jenisRangkaian === "single") {
           dayName = "Hari Kegiatan";
           date = normalizeDate(k.tanggalRaw!);
@@ -412,18 +445,18 @@ export default function DashboardKonsumsi() {
           rangkaianId = s.id;
           date = normalizeDate(s.tanggalRaw);
         }
-        
+
         setSelectedDay(dayName);
         setSelectedRangkaianId(rangkaianId);
         setSelectedDate(date);
-        
+
         // Update URL dengan pilihan default
         updateURLParams({
           kegiatanId: k.id.toString(),
           kegiatanNama: encodeURIComponent(k.nama),
           dayName: encodeURIComponent(dayName),
           rangkaianId: rangkaianId ? rangkaianId.toString() : "null",
-          date: encodeURIComponent(date)
+          date: encodeURIComponent(date),
         });
       } else {
         setError("Tidak ada kegiatan");
@@ -448,7 +481,7 @@ export default function DashboardKonsumsi() {
         tanggal: dateOnly,
         limit: "1000",
         _t: Date.now().toString(),
-        _refresh: silent ? 'true' : 'false'
+        _refresh: silent ? "true" : "false",
       });
       params.append(
         "kegiatan_rangkaian_id",
@@ -481,20 +514,27 @@ export default function DashboardKonsumsi() {
   // Manual refresh handler
   const handleManualRefresh = async () => {
     if (selectedKegiatanId && selectedDate) {
-      console.log('🔄 Manual refresh konsumsi triggered...');
-      setRefreshKey(prev => prev + 1);
+      console.log("🔄 Manual refresh konsumsi triggered...");
+      setRefreshKey((prev) => prev + 1);
       await fetchKonsumsiData(true);
     }
   };
 
-  const getCurrentKegiatan = () => kegiatanList.find((k) => k.id === selectedKegiatanId);
+  const getCurrentKegiatan = () =>
+    kegiatanList.find((k) => k.id === selectedKegiatanId);
 
   // Fix: getDayOptions untuk kegiatan tertentu
   const getDayOptions = (kegiatan?: KegiatanData): DayOption[] => {
     const k = kegiatan || getCurrentKegiatan();
     if (!k) return [];
     if (k.jenisRangkaian === "single") {
-      return [{ id: k.id, nama: "Hari Kegiatan", tanggal: normalizeDate(k.tanggalRaw!) }];
+      return [
+        {
+          id: k.id,
+          nama: "Hari Kegiatan",
+          tanggal: normalizeDate(k.tanggalRaw!),
+        },
+      ];
     }
     return (
       k.subKegiatan?.map((s) => ({
@@ -509,12 +549,15 @@ export default function DashboardKonsumsi() {
     activeCardFilter === "semua"
       ? {
           total: stats.konsumsi_1.total + stats.konsumsi_2.total,
-          sudah_diambil: stats.konsumsi_1.sudah_diambil + stats.konsumsi_2.sudah_diambil,
-          belum_diambil: stats.konsumsi_1.belum_diambil + stats.konsumsi_2.belum_diambil,
+          sudah_diambil:
+            stats.konsumsi_1.sudah_diambil + stats.konsumsi_2.sudah_diambil,
+          belum_diambil:
+            stats.konsumsi_1.belum_diambil + stats.konsumsi_2.belum_diambil,
           persentase:
             stats.konsumsi_1.total + stats.konsumsi_2.total
               ? Math.round(
-                  ((stats.konsumsi_1.sudah_diambil + stats.konsumsi_2.sudah_diambil) /
+                  ((stats.konsumsi_1.sudah_diambil +
+                    stats.konsumsi_2.sudah_diambil) /
                     (stats.konsumsi_1.total + stats.konsumsi_2.total)) *
                     100
                 )
@@ -534,11 +577,11 @@ export default function DashboardKonsumsi() {
     setSelectedKegiatan(k.nama);
     setSelectedKegiatanId(k.id);
     setShowKegiatanDropdown(false);
-    
+
     let dayName = "";
     let rangkaianId = null;
     let date = "";
-    
+
     if (k.jenisRangkaian === "single") {
       dayName = "Hari Kegiatan";
       date = normalizeDate(k.tanggalRaw!);
@@ -550,20 +593,20 @@ export default function DashboardKonsumsi() {
         rangkaianId = days[0].id;
       }
     }
-    
+
     setSelectedDay(dayName);
     setSelectedDate(date);
     setSelectedRangkaianId(rangkaianId);
-    
+
     // Update URL
     updateURLParams({
       kegiatanId: k.id.toString(),
       kegiatanNama: encodeURIComponent(k.nama),
       dayName: encodeURIComponent(dayName),
       rangkaianId: rangkaianId ? rangkaianId.toString() : "null",
-      date: encodeURIComponent(date)
+      date: encodeURIComponent(date),
     });
-    
+
     setCurrentPage(1);
     setError("");
     setRefreshKey((prev) => prev + 1);
@@ -573,21 +616,21 @@ export default function DashboardKonsumsi() {
   const handleDayChange = (d: DayOption) => {
     const k = getCurrentKegiatan();
     const newRangkaianId = k?.jenisRangkaian === "single" ? null : d.id;
-    
+
     setSelectedDay(d.nama);
     setSelectedDate(d.tanggal);
     setSelectedRangkaianId(newRangkaianId);
     setShowDayDropdown(false);
-    
+
     // Update URL
     updateURLParams({
       kegiatanId: selectedKegiatanId?.toString() || "",
       kegiatanNama: encodeURIComponent(selectedKegiatan),
       dayName: encodeURIComponent(d.nama),
       rangkaianId: newRangkaianId ? newRangkaianId.toString() : "null",
-      date: encodeURIComponent(d.tanggal)
+      date: encodeURIComponent(d.tanggal),
     });
-    
+
     setCurrentPage(1);
     setError("");
     setRefreshKey((prev) => prev + 1);
@@ -596,7 +639,16 @@ export default function DashboardKonsumsi() {
   const handleDownload = () => {
     const k = getCurrentKegiatan();
     const csv = [
-      ["NIM", "Nama", "Divisi", "Jenis", "Status", "Waktu", "Tanggal", "Metode"],
+      [
+        "NIM",
+        "Nama",
+        "Divisi",
+        "Jenis",
+        "Status",
+        "Waktu",
+        "Tanggal",
+        "Metode",
+      ],
       ...filteredKonsumsiData.map((x) => [
         x.nim,
         x.nama_lengkap,
@@ -627,26 +679,28 @@ export default function DashboardKonsumsi() {
       setError("Pilih kegiatan dan tanggal terlebih dahulu");
       return;
     }
-    
+
     // Build URL parameters untuk QR scanner dengan return state
     const qrParams = new URLSearchParams({
       kegiatanId: selectedKegiatanId.toString(),
       kegiatanNama: selectedKegiatan,
       tanggal: selectedDate,
-      tipe: 'konsumsi', // Specify this is for konsumsi scanning
+      tipe: "konsumsi", // Specify this is for konsumsi scanning
       // Return state parameters untuk restore dashboard state
       returnKegiatanId: selectedKegiatanId.toString(),
       returnKegiatanNama: encodeURIComponent(selectedKegiatan),
       returnDayName: encodeURIComponent(selectedDay),
-      returnRangkaianId: selectedRangkaianId ? selectedRangkaianId.toString() : "null",
-      returnDate: encodeURIComponent(selectedDate)
+      returnRangkaianId: selectedRangkaianId
+        ? selectedRangkaianId.toString()
+        : "null",
+      returnDate: encodeURIComponent(selectedDate),
     });
-    
+
     if (selectedRangkaianId) {
       qrParams.append("rangkaianId", selectedRangkaianId.toString());
       qrParams.append("rangkaianNama", selectedDay);
     }
-    
+
     // Navigate to QR scanner page
     router.push(`/dashboardkonsumsi/qraja?${qrParams.toString()}`);
   };
@@ -665,18 +719,33 @@ export default function DashboardKonsumsi() {
   const renderPagination = () => {
     const pageNumbers = [];
     const maxPageNumbers = 5;
-    
+
     if (totalPages <= maxPageNumbers) {
       for (let i = 1; i <= totalPages; i++) {
         pageNumbers.push(i);
       }
     } else {
       if (currentPage <= 3) {
-        pageNumbers.push(1, 2, 3, 4, '...', totalPages);
+        pageNumbers.push(1, 2, 3, 4, "...", totalPages);
       } else if (currentPage >= totalPages - 2) {
-        pageNumbers.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+        pageNumbers.push(
+          1,
+          "...",
+          totalPages - 3,
+          totalPages - 2,
+          totalPages - 1,
+          totalPages
+        );
       } else {
-        pageNumbers.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+        pageNumbers.push(
+          1,
+          "...",
+          currentPage - 1,
+          currentPage,
+          currentPage + 1,
+          "...",
+          totalPages
+        );
       }
     }
 
@@ -689,22 +758,24 @@ export default function DashboardKonsumsi() {
         >
           <ChevronLeft size={16} />
         </button>
-        
+
         {pageNumbers.map((page, index) => (
           <button
             key={index}
-            onClick={() => typeof page === 'number' && setCurrentPage(page)}
-            disabled={typeof page !== 'number'}
+            onClick={() => typeof page === "number" && setCurrentPage(page)}
+            disabled={typeof page !== "number"}
             className={`px-3 py-2 text-sm border rounded-md ${
               page === currentPage
-                ? 'bg-[#4891A1] text-white border-[#4891A1]'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-            } ${typeof page !== 'number' ? 'cursor-default' : 'cursor-pointer'}`}
+                ? "bg-[#4891A1] text-white border-[#4891A1]"
+                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+            } ${
+              typeof page !== "number" ? "cursor-default" : "cursor-pointer"
+            }`}
           >
             {page}
           </button>
         ))}
-        
+
         <button
           onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
           disabled={currentPage === totalPages}
@@ -741,8 +812,13 @@ export default function DashboardKonsumsi() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div className="w-full">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Konsumsi Panitia</h1>
-            <p className="text-gray-600 mt-1 text-sm sm:text-base">Dashboard pemantauan pengambilan konsumsi Panitia Raja Brawijaya 2025</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Konsumsi Panitia
+            </h1>
+            <p className="text-gray-600 mt-1 text-sm sm:text-base">
+              Dashboard pemantauan pengambilan konsumsi Panitia Raja Brawijaya
+              2025
+            </p>
             {isRefreshing && (
               <div className="flex items-center gap-2 mt-2">
                 <div className="flex items-center gap-1 text-sm text-[#4891A1] bg-blue-50 px-2 py-1 rounded-full">
@@ -754,7 +830,7 @@ export default function DashboardKonsumsi() {
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto">
             {/* Debug Toggle */}
-            <button
+            {/* <button
               onClick={() => setShowDebug(!showDebug)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                 showDebug 
@@ -765,26 +841,28 @@ export default function DashboardKonsumsi() {
             >
               <Bug size={16} />
               Debug {showDebug ? 'ON' : 'OFF'}
-            </button>
-            
+            </button> */}
+
             {/* Refresh Button */}
             <button
               onClick={handleManualRefresh}
               disabled={!selectedKegiatanId || !selectedDate || isLoading}
               className={`flex items-center gap-2 bg-[#4891A1] text-white px-4 py-2 rounded-lg hover:bg-[#35707e] font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm ${
-                isRefreshing ? 'animate-pulse' : ''
+                isRefreshing ? "animate-pulse" : ""
               }`}
               title="Refresh data terbaru"
             >
-              <RefreshCw 
-                size={16} 
-                className={`${isRefreshing ? 'animate-spin' : ''} transition-transform duration-200`}
+              <RefreshCw
+                size={16}
+                className={`${
+                  isRefreshing ? "animate-spin" : ""
+                } transition-transform duration-200`}
               />
               <span className="hidden sm:inline">
-                {isRefreshing ? 'Loading...' : 'Refresh'}
+                {isRefreshing ? "Loading..." : "Refresh"}
               </span>
             </button>
-            
+
             <button
               onClick={handleDownload}
               disabled={!filteredKonsumsiData.length}
@@ -805,26 +883,56 @@ export default function DashboardKonsumsi() {
               Debug Information - Konsumsi
             </h3>
             <div className="text-sm text-orange-700 space-y-1">
-              <p><strong>Selected Kegiatan ID:</strong> {selectedKegiatanId}</p>
-              <p><strong>Selected Kegiatan:</strong> {selectedKegiatan}</p>
-              <p><strong>Selected Day:</strong> {selectedDay}</p>
-              <p><strong>Selected Rangkaian ID:</strong> {selectedRangkaianId}</p>
-              <p><strong>Selected Date:</strong> {selectedDate}</p>
-              <p><strong>Is Single Event:</strong> {isSingleEvent() ? 'Yes' : 'No'}</p>
-              <p><strong>Total Records:</strong> {allKonsumsiData.length}</p>
-              <p><strong>Filtered Records:</strong> {filteredKonsumsiData.length}</p>
-              <p><strong>Current Page Data:</strong> {sortedGroups.slice(start, end).length}</p>
-              <p><strong>Page:</strong> {currentPage} of {totalPages}</p>
-              <p><strong>Refresh Key:</strong> {refreshKey}</p>
+              <p>
+                <strong>Selected Kegiatan ID:</strong> {selectedKegiatanId}
+              </p>
+              <p>
+                <strong>Selected Kegiatan:</strong> {selectedKegiatan}
+              </p>
+              <p>
+                <strong>Selected Day:</strong> {selectedDay}
+              </p>
+              <p>
+                <strong>Selected Rangkaian ID:</strong> {selectedRangkaianId}
+              </p>
+              <p>
+                <strong>Selected Date:</strong> {selectedDate}
+              </p>
+              <p>
+                <strong>Is Single Event:</strong>{" "}
+                {isSingleEvent() ? "Yes" : "No"}
+              </p>
+              <p>
+                <strong>Total Records:</strong> {allKonsumsiData.length}
+              </p>
+              <p>
+                <strong>Filtered Records:</strong> {filteredKonsumsiData.length}
+              </p>
+              <p>
+                <strong>Current Page Data:</strong>{" "}
+                {sortedGroups.slice(start, end).length}
+              </p>
+              <p>
+                <strong>Page:</strong> {currentPage} of {totalPages}
+              </p>
+              <p>
+                <strong>Refresh Key:</strong> {refreshKey}
+              </p>
               <div className="mt-2 p-2 bg-white rounded text-xs">
                 <strong>URL State:</strong>
-                <pre>{JSON.stringify({
-                  kegiatanId: searchParams.get('kegiatanId'),
-                  kegiatanNama: searchParams.get('kegiatanNama'),
-                  dayName: searchParams.get('dayName'),
-                  rangkaianId: searchParams.get('rangkaianId'),
-                  date: searchParams.get('date')
-                }, null, 2)}</pre>
+                <pre>
+                  {JSON.stringify(
+                    {
+                      kegiatanId: searchParams.get("kegiatanId"),
+                      kegiatanNama: searchParams.get("kegiatanNama"),
+                      dayName: searchParams.get("dayName"),
+                      rangkaianId: searchParams.get("rangkaianId"),
+                      date: searchParams.get("date"),
+                    },
+                    null,
+                    2
+                  )}
+                </pre>
               </div>
             </div>
           </div>
@@ -835,12 +943,21 @@ export default function DashboardKonsumsi() {
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-sm">
             <AlertCircle size={20} className="text-red-600" />
             <span className="text-red-800">{error}</span>
-            <button onClick={() => setError("")} className="ml-auto text-red-600 hover:text-red-800">×</button>
+            <button
+              onClick={() => setError("")}
+              className="ml-auto text-red-600 hover:text-red-800"
+            >
+              ×
+            </button>
           </div>
         )}
 
         {/* Dropdowns - Conditional grid layout */}
-        <div className={`grid gap-4 mb-6 ${isSingleEvent() ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+        <div
+          className={`grid gap-4 mb-6 ${
+            isSingleEvent() ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"
+          }`}
+        >
           {/* Kegiatan Dropdown */}
           <div className="relative">
             <button
@@ -861,10 +978,15 @@ export default function DashboardKonsumsi() {
                     <div className="font-medium">{k.nama}</div>
                     <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
                       <Calendar size={12} />
-                      {k.jenisRangkaian === "single" ? "Single Event" : "Multiple Events"}
+                      {k.jenisRangkaian === "single"
+                        ? "Single Event"
+                        : "Multiple Events"}
                       {k.divisi && (
                         <>
-                          • {k.divisi.length > 3 ? `${k.divisi.length} Divisi` : k.divisi.join(", ")}
+                          •{" "}
+                          {k.divisi.length > 3
+                            ? `${k.divisi.length} Divisi`
+                            : k.divisi.join(", ")}
                         </>
                       )}
                     </div>
@@ -909,9 +1031,24 @@ export default function DashboardKonsumsi() {
         {/* Card Filter Buttons */}
         <div className="flex gap-2 flex-wrap mb-6">
           {[
-            { key: "konsumsi_1", label: "Konsumsi 1", icon: Coffee, color: "blue" },
-            { key: "konsumsi_2", label: "Konsumsi 2", icon: Utensils, color: "orange" },
-            { key: "semua", label: "Semua Konsumsi", icon: Users, color: "gray" }
+            {
+              key: "konsumsi_1",
+              label: "Konsumsi 1",
+              icon: Coffee,
+              color: "blue",
+            },
+            {
+              key: "konsumsi_2",
+              label: "Konsumsi 2",
+              icon: Utensils,
+              color: "orange",
+            },
+            {
+              key: "semua",
+              label: "Semua Konsumsi",
+              icon: Users,
+              color: "gray",
+            },
           ].map((filter) => (
             <button
               key={filter.key}
@@ -934,19 +1071,25 @@ export default function DashboardKonsumsi() {
           <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-[#4891A1]">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-2xl font-bold text-gray-900">{selectedKegiatan || "-"}</div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {selectedKegiatan || "-"}
+                </div>
                 <div className="text-xl font-semibold text-[#4891A1]">
                   {isSingleEvent() ? "Single Event" : selectedDay}
                 </div>
                 {selectedDate && (
-                  <div className="text-sm text-gray-500 mt-1">{fmtDate(selectedDate)}</div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {fmtDate(selectedDate)}
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
           {/* Card Konsumsi 1 - Tampil jika filter bukan 'konsumsi_2' atau jika 'semua'/'konsumsi_1' */}
-          {(activeCardFilter === "konsumsi_1" || activeCardFilter === "konsumsi_2" || activeCardFilter === "semua") && (
+          {(activeCardFilter === "konsumsi_1" ||
+            activeCardFilter === "konsumsi_2" ||
+            activeCardFilter === "semua") && (
             <div className="bg-white p-6 rounded-xl shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-blue-100 rounded-lg">
@@ -954,19 +1097,25 @@ export default function DashboardKonsumsi() {
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Konsumsi 1</div>
-                  <div className="text-sm font-medium text-gray-400">Sudah Diambil</div>
+                  <div className="text-sm font-medium text-gray-400">
+                    Sudah Diambil
+                  </div>
                 </div>
               </div>
               <div className="flex items-center justify-between mb-2">
-                <div className="text-3xl font-bold text-green-600">{stats.konsumsi_1.sudah_diambil}</div>
-                <div className="text-sm text-gray-500">{stats.konsumsi_1.persentase}%</div>
+                <div className="text-3xl font-bold text-green-600">
+                  {stats.konsumsi_1.sudah_diambil}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {stats.konsumsi_1.persentase}%
+                </div>
               </div>
               <div className="text-lg font-medium text-red-600 mb-3">
                 Belum diambil {stats.konsumsi_1.belum_diambil}
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                <div
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${stats.konsumsi_1.persentase}%` }}
                 ></div>
               </div>
@@ -974,7 +1123,8 @@ export default function DashboardKonsumsi() {
           )}
 
           {/* Card Konsumsi 2 - Tampil jika filter 'konsumsi_2' atau 'semua' */}
-          {(activeCardFilter === "konsumsi_2" || activeCardFilter === "semua") && (
+          {(activeCardFilter === "konsumsi_2" ||
+            activeCardFilter === "semua") && (
             <div className="bg-white p-6 rounded-xl shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-orange-100 rounded-lg">
@@ -982,19 +1132,25 @@ export default function DashboardKonsumsi() {
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Konsumsi 2</div>
-                  <div className="text-sm font-medium text-gray-400">Sudah Diambil</div>
+                  <div className="text-sm font-medium text-gray-400">
+                    Sudah Diambil
+                  </div>
                 </div>
               </div>
               <div className="flex items-center justify-between mb-2">
-                <div className="text-3xl font-bold text-green-600">{stats.konsumsi_2.sudah_diambil}</div>
-                <div className="text-sm text-gray-500">{stats.konsumsi_2.persentase}%</div>
+                <div className="text-3xl font-bold text-green-600">
+                  {stats.konsumsi_2.sudah_diambil}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {stats.konsumsi_2.persentase}%
+                </div>
               </div>
               <div className="text-lg font-medium text-red-600 mb-3">
                 Belum diambil {stats.konsumsi_2.belum_diambil}
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                <div
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${stats.konsumsi_2.persentase}%` }}
                 ></div>
               </div>
@@ -1010,19 +1166,23 @@ export default function DashboardKonsumsi() {
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Total Konsumsi</div>
-                  <div className="text-sm font-medium text-gray-400">Sudah Diambil</div>
+                  <div className="text-sm font-medium text-gray-400">
+                    Sudah Diambil
+                  </div>
                 </div>
               </div>
               <div className="flex items-center justify-between mb-2">
-                <div className="text-3xl font-bold text-green-600">{currentStats.sudah_diambil}</div>
+                <div className="text-3xl font-bold text-green-600">
+                  {currentStats.sudah_diambil}
+                </div>
                 <div className="text-sm text-gray-500">{sudahPct}%</div>
               </div>
               <div className="text-lg font-medium text-red-600 mb-3">
                 Belum diambil {currentStats.belum_diambil}
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                <div
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${sudahPct}%` }}
                 ></div>
               </div>
@@ -1038,7 +1198,10 @@ export default function DashboardKonsumsi() {
                 <RefreshCw size={16} className="text-[#4891A1] animate-spin" />
               )}
               <div className="relative w-full md:w-auto">
-                <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                />
                 <input
                   type="text"
                   placeholder="Cari Nama, NIM, Divisi"
@@ -1051,13 +1214,11 @@ export default function DashboardKonsumsi() {
           </div>
 
           {/* Data Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
-            <div className="flex items-center gap-2">
-              <Users size={20} className="text-[#4891A1]" />
-              <span className="font-semibold text-gray-900 text-sm sm:text-base">
-                Data Panitia ({filteredKonsumsiData.length})
-              </span>
-            </div>
+          <div className="flex items-center gap-2">
+            <Users size={20} className="text-[#4891A1]" />
+            <span className="font-semibold text-gray-900 text-sm sm:text-base">
+              Data Konsumsi ({meta.total_panitia_eligible})
+            </span>
           </div>
 
           {/* Table Responsive */}
@@ -1068,36 +1229,60 @@ export default function DashboardKonsumsi() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     NIM
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('nama_lengkap')}>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                    onClick={() => handleSort("nama_lengkap")}
+                  >
                     <span className="flex items-center gap-1">
                       Nama
-                      {sortConfig?.key === 'nama_lengkap' && (
-                        sortConfig.direction === 'asc' ? <ChevronDown className="inline w-3 h-3" /> : <ChevronUp className="inline w-3 h-3" />
-                      )}
+                      {sortConfig?.key === "nama_lengkap" &&
+                        (sortConfig.direction === "asc" ? (
+                          <ChevronDown className="inline w-3 h-3" />
+                        ) : (
+                          <ChevronUp className="inline w-3 h-3" />
+                        ))}
                     </span>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('divisi')}>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                    onClick={() => handleSort("divisi")}
+                  >
                     <span className="flex items-center gap-1">
                       Divisi
-                      {sortConfig?.key === 'divisi' && (
-                        sortConfig.direction === 'asc' ? <ChevronDown className="inline w-3 h-3" /> : <ChevronUp className="inline w-3 h-3" />
-                      )}
+                      {sortConfig?.key === "divisi" &&
+                        (sortConfig.direction === "asc" ? (
+                          <ChevronDown className="inline w-3 h-3" />
+                        ) : (
+                          <ChevronUp className="inline w-3 h-3" />
+                        ))}
                     </span>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('konsumsi_1')}>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                    onClick={() => handleSort("konsumsi_1")}
+                  >
                     <span className="flex items-center gap-1">
                       Konsumsi 1
-                      {sortConfig?.key === 'konsumsi_1' && (
-                        sortConfig.direction === 'asc' ? <ChevronDown className="inline w-3 h-3" /> : <ChevronUp className="inline w-3 h-3" />
-                      )}
+                      {sortConfig?.key === "konsumsi_1" &&
+                        (sortConfig.direction === "asc" ? (
+                          <ChevronDown className="inline w-3 h-3" />
+                        ) : (
+                          <ChevronUp className="inline w-3 h-3" />
+                        ))}
                     </span>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => handleSort('konsumsi_2')}>
+                  <th
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none"
+                    onClick={() => handleSort("konsumsi_2")}
+                  >
                     <span className="flex items-center gap-1">
                       Konsumsi 2
-                      {sortConfig?.key === 'konsumsi_2' && (
-                        sortConfig.direction === 'asc' ? <ChevronDown className="inline w-3 h-3" /> : <ChevronUp className="inline w-3 h-3" />
-                      )}
+                      {sortConfig?.key === "konsumsi_2" &&
+                        (sortConfig.direction === "asc" ? (
+                          <ChevronDown className="inline w-3 h-3" />
+                        ) : (
+                          <ChevronUp className="inline w-3 h-3" />
+                        ))}
                     </span>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1117,10 +1302,13 @@ export default function DashboardKonsumsi() {
                   </tr>
                 ) : sortedGroups.slice(start, end).length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                      {!selectedKegiatanId || !selectedDate 
+                    <td
+                      colSpan={6}
+                      className="px-6 py-12 text-center text-gray-500"
+                    >
+                      {!selectedKegiatanId || !selectedDate
                         ? "Pilih kegiatan dan tanggal untuk melihat data konsumsi"
-                        : searchQuery 
+                        : searchQuery
                         ? "Tidak ada data yang sesuai dengan pencarian"
                         : "Belum ada data konsumsi"}
                     </td>
@@ -1140,23 +1328,31 @@ export default function DashboardKonsumsi() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            group.konsumsi_1?.status_pengambilan === "sudah_diambil"
+                            group.konsumsi_1?.status_pengambilan ===
+                            "sudah_diambil"
                               ? "bg-green-100 text-green-800"
                               : "bg-red-100 text-red-800"
                           }`}
                         >
-                          {group.konsumsi_1?.status_pengambilan === "sudah_diambil" ? "Sudah" : "Belum"}
+                          {group.konsumsi_1?.status_pengambilan ===
+                          "sudah_diambil"
+                            ? "Sudah"
+                            : "Belum"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            group.konsumsi_2?.status_pengambilan === "sudah_diambil"
+                            group.konsumsi_2?.status_pengambilan ===
+                            "sudah_diambil"
                               ? "bg-green-100 text-green-800"
                               : "bg-red-100 text-red-800"
                           }`}
                         >
-                          {group.konsumsi_2?.status_pengambilan === "sudah_diambil" ? "Sudah" : "Belum"}
+                          {group.konsumsi_2?.status_pengambilan ===
+                          "sudah_diambil"
+                            ? "Sudah"
+                            : "Belum"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1176,9 +1372,7 @@ export default function DashboardKonsumsi() {
           </div>
 
           {/* Pagination */}
-          <div className="mt-4">
-            {totalPages > 1 && renderPagination()}
-          </div>
+          <div className="mt-4">{totalPages > 1 && renderPagination()}</div>
         </div>
       </div>
       {/* Floating QR Scan Button */}
@@ -1186,7 +1380,7 @@ export default function DashboardKonsumsi() {
         onClick={handleScanQR}
         title="Scan QR Konsumsi"
         className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-[#4891A1] text-white flex items-center justify-center shadow-lg hover:bg-[#35707e] focus:outline-none focus:ring-4 focus:ring-[#4891A1]/30 transition-all duration-200"
-        style={{ boxShadow: '0 4px 24px 0 rgba(72,145,161,0.18)' }}
+        style={{ boxShadow: "0 4px 24px 0 rgba(72,145,161,0.18)" }}
       >
         <QrCode size={32} />
       </button>

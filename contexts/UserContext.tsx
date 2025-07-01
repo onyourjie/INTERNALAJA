@@ -1,4 +1,4 @@
-// File: contexts/UserContext.tsx
+// File: contexts/UserContext.tsx (Fixed untuk Google Image)
 
 "use client";
 
@@ -20,6 +20,8 @@ interface UserData {
   jabatan_nama: string;
   // Flag divisi
   isPIT: boolean;
+  // Google Profile Image - FIELD YANG DITAMBAHKAN
+  profile_image?: string | null;
 }
 
 interface UserContextType {
@@ -48,6 +50,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
       
+      console.log('🔍 UserContext: Fetching user data for:', session.user.email);
+      console.log('🖼️ UserContext: Current session image:', session.user.image);
+      
       const response = await fetch('/api/user/session', {
         method: 'GET',
         headers: {
@@ -65,9 +70,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         throw new Error(data.error);
       }
 
+      console.log('✅ UserContext: User data loaded:', {
+        nama: data.user.nama_lengkap,
+        divisi: data.user.divisi_nama,
+        isPIT: data.user.isPIT,
+        profile_image: data.user.profile_image,
+        session_image: data.user.session_image
+      });
+
       setUserData(data.user);
     } catch (err: any) {
-      console.error('Error fetching user data:', err);
+      console.error('❌ UserContext: Error fetching user data:', err);
       setError(err.message || 'Failed to fetch user data');
       setUserData(null);
     } finally {
@@ -77,6 +90,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchUserData();
+  }, [session, status]);
+
+  // Debug log untuk session changes
+  useEffect(() => {
+    console.log('🔍 UserContext: Session changed:', {
+      status,
+      email: session?.user?.email,
+      image: session?.user?.image,
+      hasSession: !!session
+    });
   }, [session, status]);
 
   const refetch = () => {

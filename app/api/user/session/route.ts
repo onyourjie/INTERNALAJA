@@ -1,5 +1,3 @@
-// File: app/api/user/session/route.ts (Versi Optimized)
-
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -52,12 +50,18 @@ export async function GET() {
 
     const panitiaData = rows[0];
     
+    console.log("🖼️ User Session API - Image sources:", {
+      session_image: session.user.image,
+      user_email: session.user.email,
+      image_source: session.user.image ? 'Google' : 'None'
+    });
+    
     return NextResponse.json({
       user: {
-        // Data dari session
+        // Data dari session (termasuk Google image)
         session_id: session.user.id,
         session_name: session.user.name,
-        session_image: session.user.image,
+        session_image: session.user.image, // Google image
         // Data dari tabel panitia
         panitia_id: panitiaData.id,
         nama_lengkap: panitiaData.nama_lengkap,
@@ -67,7 +71,9 @@ export async function GET() {
         divisi_nama: panitiaData.divisi_nama,
         jabatan_nama: panitiaData.jabatan_nama,
         // Flag untuk cek divisi PIT
-        isPIT: panitiaData.divisi_nama === 'PIT'
+        isPIT: panitiaData.divisi_nama === 'PIT',
+        // Profile image (prioritas Google image dari session)
+        profile_image: session.user.image || null
       }
     }, { status: 200 });
 

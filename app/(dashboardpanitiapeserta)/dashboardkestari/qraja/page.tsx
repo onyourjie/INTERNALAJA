@@ -1212,7 +1212,7 @@ export default function QRScannerPage() {
               }
             >
               {dateValidation.isValid 
-                ? "⚡ ULTRA-FAST SCAN ABSENSI" 
+                ? "⚡ MULAI SCAN" 
                 : dateValidation.isExpired 
                 ? "⏰ Kadaluarsa" 
                 : "🚀 Belum Dimulai"}

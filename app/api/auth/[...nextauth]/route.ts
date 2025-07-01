@@ -1,5 +1,3 @@
-// File: app/api/auth/[...nextauth]/route.ts (Updated)
-
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import type { AuthOptions } from "next-auth";
@@ -38,6 +36,8 @@ export const authOptions: AuthOptions = {
 
       try {
         const userName = user.name || profile.name || "";
+        // Prioritaskan Google image dari profile
+        const userImage = profile.picture || user.image || "";
 
         // Cek apakah user sudah ada di tabel users
         const [userRows] = await db.query(
@@ -47,16 +47,16 @@ export const authOptions: AuthOptions = {
         const userExists = Array.isArray(userRows) && userRows.length > 0;
 
         if (userExists) {
-          // Update users table
+          // Update users table dengan Google image terbaru
           await db.query(
             "UPDATE users SET name = ?, image = ? WHERE email = ?",
-            [userName, user.image || "", email]
+            [userName, userImage, email]
           );
         } else {
-          // Buat user baru jika tidak ada
+          // Buat user baru dengan Google image
           await db.query(
             "INSERT INTO users (email, name, image) VALUES (?, ?, ?)",
-            [email, userName, user.image || ""]
+            [email, userName, userImage]
           );
         }
 
@@ -81,8 +81,9 @@ export const authOptions: AuthOptions = {
         console.log("🔍 Google Profile Info:", {
           email,
           name: userName,
-          image: user.image,
-          profile_picture: profile.picture
+          image: userImage,
+          profile_picture: profile.picture,
+          user_image: user.image
         });
 
         return true;
@@ -92,7 +93,7 @@ export const authOptions: AuthOptions = {
       }
     },
 
-    async session({ session }) {
+    async session({ session, token }) {
       if (session?.user?.email) {
         try {
           const [rows] = await db.query(
@@ -104,11 +105,14 @@ export const authOptions: AuthOptions = {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const dbUser = rows[0] as any;
             
-            // Update session dengan data dari database, tapi preserve Google image
+            // Update session dengan data dari database
             session.user.id = dbUser.id;
             if (dbUser.name) session.user.name = dbUser.name;
-            // Prioritaskan Google image dari provider, fallback ke database
-            if (!session.user.image && dbUser.image) {
+            
+            // Prioritaskan Google image dari token, fallback ke database
+            if (token.picture) {
+              session.user.image = token.picture as string;
+            } else if (dbUser.image) {
               session.user.image = dbUser.image;
             }
             
@@ -116,7 +120,8 @@ export const authOptions: AuthOptions = {
               id: session.user.id,
               name: session.user.name,
               email: session.user.email,
-              image: session.user.image
+              image: session.user.image,
+              source: token.picture ? 'token' : 'database'
             });
           }
         } catch (error) {
@@ -126,16 +131,22 @@ export const authOptions: AuthOptions = {
       return session;
     },
 
-    async jwt({ token, user }) {
+    async jwt({ token, user, account, profile }) {
       // Tambahkan data user ke token jika ada
       if (user) {
         token.id = user.id;
         token.picture = user.image;
       }
+      
+      // Update token dengan Google image dari profile saat fresh login
+      if (account && profile && profile.picture) {
+        token.picture = profile.picture;
+      }
+      
       return token;
     },
 
-    // Custom redirect berdasarkan divisi
+    // Custom redirect berdasarkan divisi menggunakan API divisi-access
     async redirect({ url, baseUrl }) {
       // Jika URL sudah absolut dan bukan dari domain yang sama, gunakan baseUrl
       if (url.startsWith("/")) {
@@ -144,13 +155,13 @@ export const authOptions: AuthOptions = {
         return url;
       }
       
-      // Default redirect ke halaman redirect checker
+      // Redirect ke auth/redirect-checker untuk divisi-based redirect
       return `${baseUrl}/auth/redirect-checker`;
     }
   },
   pages: {
-    signIn: "/login",
-    error: "/login",
+    signIn: "/", // Konsisten dengan redirect yang digunakan
+    error: "/",
   },
   session: {
     strategy: "jwt",
