@@ -66,7 +66,7 @@ export default function HomePage() {
       try {
         if (userData.isPIT) {
           // PIT user ke panel
-          router.push('/panel/panitia')
+          router.push('/panitia')
         } else if (['KESTARI', 'KONSUMSI'].includes(userData.divisi_nama)) {
           // Divisi tertentu ke dashboard panitia peserta
           const divisiPath = userData.divisi_nama.toLowerCase()

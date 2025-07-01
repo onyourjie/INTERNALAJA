@@ -239,16 +239,6 @@ export default function PanelLayout({
                       </p>
                       <p className="text-xs text-gray-600">
                         {userData.jabatan_nama} - {userData.divisi_nama}
-                        {isPITUser && (
-                          <span className="ml-2 px-2 py-1 rounded-full text-xs font-medium"
-                                style={{
-                                  backgroundColor: 'rgba(72, 145, 161, 0.1)',
-                                  color: '#4891A1',
-                                  border: '1px solid rgba(72, 145, 161, 0.3)'
-                                }}>
-                            PIT
-                          </span>
-                        )}
                       </p>
                     </div>
                   </div>

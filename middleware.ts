@@ -7,7 +7,7 @@ export default withAuth(
     const token = req.nextauth.token;
     
     // Check jika mengakses panel panitia
-    if (req.nextUrl.pathname.startsWith('/panel/panitia')) {
+    if (req.nextUrl.pathname.startsWith('/panitia')) {
       if (!token?.email) {
         return NextResponse.redirect(new URL('/api/auth/signin', req.url));
       }
