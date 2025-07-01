@@ -70,7 +70,7 @@ export default function HomePage() {
         } else if (['KESTARI', 'KONSUMSI'].includes(userData.divisi_nama)) {
           // Divisi tertentu ke dashboard panitia peserta
           const divisiPath = userData.divisi_nama.toLowerCase()
-          router.push(`/dashboardpanitiapeserta/dashboard${divisiPath}`)
+          router.push(`/dashboard${divisiPath}`)
         } else {
           // Divisi lain ke dashboard umum (jika ada)
           router.push('/dashboard')
