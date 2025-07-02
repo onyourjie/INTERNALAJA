@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -70,6 +71,7 @@ export default function EditKegiatanPage() {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
   const handleUpdateSuccess = (data: any) => {
     // Show success message
     const successDiv = document.createElement('div')

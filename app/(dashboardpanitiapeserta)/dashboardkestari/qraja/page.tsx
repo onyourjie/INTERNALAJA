@@ -1,3 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -22,7 +25,7 @@ const beep = (on = true) => {
   } catch {}
 };
 
-export default function QRScannerKonsumsiPage() {
+export default function QRScannerPage() {
   const router = useRouter();
   const q = useSearchParams();
   
@@ -43,7 +46,7 @@ export default function QRScannerKonsumsiPage() {
 
   // Debug logging
   useEffect(() => {
-    console.log("🚀 ULTRA-FAST QR Scanner initialized:", {
+    console.log("🚀 ULTRA-FAST QR Scanner Absensi initialized:", {
       kegiatanId: kid,
       kegiatanNama: kNama,
       rangkaianId: rid,
@@ -73,8 +76,8 @@ export default function QRScannerKonsumsiPage() {
   const lastScanTimeRef = useRef<number>(0); // Ultra-fast time-based debouncing
   const isErrorStateRef = useRef(false); // Prevent error spam
   const processingCacheRef = useRef<Map<string, any>>(new Map()); // Cache API responses
-  const autoRestartTimerRef = useRef<NodeJS.Timeout | null>(null); // FIXED: Timer reference
-  const userStoppedRef = useRef(false); // FIXED: Track user intention to stop
+  const autoRestartTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer reference
+  const userStoppedRef = useRef(false); // Track user intention to stop
 
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState("");
@@ -133,10 +136,7 @@ export default function QRScannerKonsumsiPage() {
           width: { ideal: 4096, max: 4096 }, // ULTRA HIGH RESOLUTION
           height: { ideal: 2160, max: 2160 },
           frameRate: { ideal: 144, max: 144 }, // MAXIMUM SPEED - 144fps!!!
-          facingMode: "environment",
-          focusMode: "continuous",
-          exposureMode: "continuous",
-          whiteBalanceMode: "continuous", // ENHANCED CAMERA SETTINGS
+          facingMode: "environment"
         },
       });
       if (videoRef.current) {
@@ -160,7 +160,7 @@ export default function QRScannerKonsumsiPage() {
     }
   }, []);
 
-  // FIXED: Clear all timers
+  // Clear all timers
   const clearAllTimers = useCallback(() => {
     if (autoRestartTimerRef.current) {
       clearTimeout(autoRestartTimerRef.current);
@@ -170,9 +170,9 @@ export default function QRScannerKonsumsiPage() {
 
   // Enhanced Back to Dashboard with State Restoration
   const handleBackToDashboard = () => {
-    console.log('🔙 Returning to konsumsi dashboard with state restoration...');
+    console.log('🔙 Returning to absensi dashboard with state restoration...');
     
-    const dashboardUrl = new URL('/dashboardkonsumsi', window.location.origin);
+    const dashboardUrl = new URL('/dashboardkestari', window.location.origin);
     
     if (returnKegiatanId && returnKegiatanNama) {
       dashboardUrl.searchParams.set('kegiatanId', returnKegiatanId);
@@ -190,7 +190,7 @@ export default function QRScannerKonsumsiPage() {
         dashboardUrl.searchParams.set('date', returnDate);
       }
       
-      console.log('✅ Konsumsi state restoration URL:', dashboardUrl.toString());
+      console.log('✅ Absensi state restoration URL:', dashboardUrl.toString());
     } else {
       console.log('⚠️ No return state available, returning to dashboard without state');
     }
@@ -202,6 +202,7 @@ export default function QRScannerKonsumsiPage() {
     try {
       const date = new Date(tanggal);
       if (isNaN(date.getTime())) return tanggal;
+
       return date.toLocaleDateString("id-ID", {
         weekday: "long",
         day: "numeric",
@@ -209,27 +210,55 @@ export default function QRScannerKonsumsiPage() {
         year: "numeric",
       });
     } catch (error) {
+      console.error("Error formatting date:", error);
       return tanggal;
     }
   }, []);
 
-  const validateTanggalKegiatan = useCallback(() => {
+  // Enhanced date validation dengan kadaluarsa detection
+  const validateTanggalKegiatan = useCallback((): {
+    isValid: boolean;
+    isExpired: boolean;
+    isFuture: boolean;
+    message: string;
+    todayFormatted: string;
+    kegiatanFormatted: string;
+  } => {
     try {
       const today = new Date();
-      const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayLocal = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      );
       const todayISO = todayLocal.toISOString().split("T")[0];
+
       const kegiatanDateStr = tgl || "";
       let kegiatanISO = "";
+
       if (kegiatanDateStr) {
         const kegiatanDate = new Date(kegiatanDateStr);
-        const kegiatanLocal = new Date(kegiatanDate.getFullYear(), kegiatanDate.getMonth(), kegiatanDate.getDate());
+        const kegiatanLocal = new Date(
+          kegiatanDate.getFullYear(),
+          kegiatanDate.getMonth(),
+          kegiatanDate.getDate()
+        );
         kegiatanISO = kegiatanLocal.toISOString().split("T")[0];
       }
-      
+
       const isValid = todayISO === kegiatanISO;
       const isExpired = kegiatanISO < todayISO;
       const isFuture = kegiatanISO > todayISO;
-      
+
+      console.log("📅 Date validation:", {
+        today: todayISO,
+        kegiatan: kegiatanISO,
+        originalKegiatan: kegiatanDateStr,
+        isValid,
+        isExpired,
+        isFuture,
+      });
+
       return {
         isValid,
         isExpired,
@@ -240,9 +269,12 @@ export default function QRScannerKonsumsiPage() {
           ? "Kegiatan sudah kadaluarsa" 
           : "Kegiatan belum dimulai",
         todayFormatted: formatTanggalIndonesia(todayISO),
-        kegiatanFormatted: formatTanggalIndonesia(kegiatanISO || kegiatanDateStr),
+        kegiatanFormatted: formatTanggalIndonesia(
+          kegiatanISO || kegiatanDateStr
+        ),
       };
-    } catch {
+    } catch (error) {
+      console.error("Error validating date:", error);
       return {
         isValid: false,
         isExpired: false,
@@ -257,71 +289,7 @@ export default function QRScannerKonsumsiPage() {
   const tanggalFormatted = tgl ? formatTanggalIndonesia(tgl) : "Tanggal tidak valid";
   const dateValidation = validateTanggalKegiatan();
 
-  // ULTRA-FAST API with caching
-  const getPanitiaIdByNim = useCallback(async (nim: string) => {
-    const cacheKey = `panitia_${nim}`;
-    if (processingCacheRef.current.has(cacheKey)) {
-      return processingCacheRef.current.get(cacheKey);
-    }
-    
-    try {
-      const res = await fetch(`/api/panitia/by-nim?nim=${encodeURIComponent(nim)}`);
-      if (!res.ok) {
-        console.log(`Panitia API error: ${res.status} ${res.statusText}`);
-        return null;
-      }
-      const data = await res.json();
-      console.log(`Panitia API response for ${nim}:`, data);
-      
-      const panitiaId = data?.data?.panitia_id || data?.panitia_id || null;
-      processingCacheRef.current.set(cacheKey, panitiaId); // CACHE RESULT
-      return panitiaId;
-    } catch (error) {
-      console.error('Error getting panitia by NIM:', error);
-      return null;
-    }
-  }, []);
-
-  // ULTRA-FAST konsumsi status with caching
-  const getKonsumsiStatus = useCallback(async (nim: string) => {
-    const cacheKey = `konsumsi_${nim}_${kid}_${tgl}_${rid}`;
-    if (processingCacheRef.current.has(cacheKey)) {
-      return processingCacheRef.current.get(cacheKey);
-    }
-    
-    try {
-      const panitiaId = await getPanitiaIdByNim(nim);
-      if (!panitiaId) {
-        console.log(`Panitia ID not found for NIM: ${nim}`);
-        return 0;
-      }
-      
-      const params = new URLSearchParams({
-        panitia_id: String(panitiaId),
-        kegiatan_id: String(kid ?? ''),
-        tanggal: String(tgl ?? ''),
-      });
-      if (rid) params.append('kegiatan_rangkaian_id', String(rid));
-      
-      const res = await fetch(`/api/konsumsi/status?${params.toString()}`);
-      if (!res.ok) {
-        console.log(`Konsumsi status API error: ${res.status} ${res.statusText}`);
-        return 0;
-      }
-      
-      const data = await res.json();
-      console.log(`Konsumsi status for NIM ${nim}:`, data);
-      
-      const status = typeof data.status === 'number' ? data.status : 0;
-      processingCacheRef.current.set(cacheKey, status); // CACHE RESULT
-      return status;
-    } catch (error) {
-      console.error('Error getting konsumsi status:', error);
-      return 0;
-    }
-  }, [kid, tgl, rid, getPanitiaIdByNim]);
-
-  // HYPER-FAST handleScan with EXTREME optimizations
+  // ✅ COMPLETE ENHANCED handleScan with DETAILED DIVISI VALIDATION
   const handleScan = useCallback(
     async (result: string) => {
       // HYPER-FAST spam prevention - REDUCED to 500ms!!!
@@ -350,10 +318,10 @@ export default function QRScannerKonsumsiPage() {
 
       const currentDateValidation = validateTanggalKegiatan();
       const currentTanggalFormatted = tgl ? formatTanggalIndonesia(tgl) : "Tanggal tidak valid";
-      
+
       // ULTRA-FAST Date validation
       if (!currentDateValidation.isValid) {
-        let alertTitle = "❌ Konsumsi Tidak Diizinkan";
+        let alertTitle = "❌ Absensi Tidak Diizinkan";
         let alertIcon: 'error' | 'warning' | 'info' = 'warning';
         
         if (currentDateValidation.isExpired) {
@@ -392,9 +360,8 @@ export default function QRScannerKonsumsiPage() {
 
       try {
         beep(soundEnabled);
-        
-        // ULTRA-FAST QR parsing
-        let parsed: { nama: string; nim: string; divisi: string };
+
+        let parsed: any;
         try {
           parsed = JSON.parse(result);
         } catch {
@@ -448,60 +415,25 @@ export default function QRScannerKonsumsiPage() {
           return;
         }
 
-        // HYPER-FAST KONSUMSI LOGIC
-        const nim = parsed.nim;
-        
-        const currentKonsumsiStatus = await getKonsumsiStatus(nim);
-        console.log(`⚡ ULTRA-FAST konsumsi status for ${nim}: ${currentKonsumsiStatus}`);
-        
-        if (currentKonsumsiStatus >= 2) {
-          await Swal.fire({
-            title: "❌ Maksimum Konsumsi Tercapai",
-            html: `<div class='text-center'>
-              <p class='text-lg font-bold text-red-500'>Konsumsi sudah diambil 2 kali!</p>
-              <hr class='my-2'>
-              <p><strong>Nama:</strong> ${parsed.nama}</p>
-              <p><strong>NIM:</strong> ${nim}</p>
-              <p><strong>Divisi:</strong> ${parsed.divisi}</p>
-            </div>`,
-            icon: "error",
-            confirmButtonText: "OK",
-            timer: 2000, // ULTRA FAST - 0.8s
-            timerProgressBar: true,
-          });
-          
-          isProcessingRef.current = false;
-          lastScannedRef.current = "";
-          return;
-        }
-
-        const nextKonsumsiNumber = currentKonsumsiStatus + 1;
-        const konsumsiLabel = nextKonsumsiNumber === 1 ? "Konsumsi 1" : "Konsumsi 2";
-        const jenis_konsumsi = nextKonsumsiNumber === 1 ? "konsumsi_1" : "konsumsi_2";
-        
-        const statusDisplay = nextKonsumsiNumber === 1 
-          ? "Belum ada konsumsi" 
-          : "Konsumsi 1 ✅";
-
+        // Enhanced konfirmasi dengan auto-focus
         const confirm = await Swal.fire({
-          title: `⚡ Konfirmasi ${konsumsiLabel}`,
+          title: "⚡ Konfirmasi Absensi",
           html: `
             <div class="text-left">
               <p><strong>Nama:</strong> ${parsed.nama}</p>
               <p><strong>NIM:</strong> ${parsed.nim}</p>
               <p><strong>Divisi:</strong> ${parsed.divisi}</p>
               <hr class="my-2">
-              <p><strong>Status:</strong> ${statusDisplay}</p>
-              <p><strong>Akan dicatat:</strong> <span class="font-bold text-green-600">${konsumsiLabel}</span></p>
+              <p><strong>Kegiatan:</strong> ${kNama}</p>
+              <p><strong>Tanggal:</strong> ${currentTanggalFormatted}</p>
               <p class="text-xs text-blue-500 mt-1">💡 Tekan Enter untuk konfirmasi</p>
             </div>
           `,
           icon: "question",
           showCancelButton: true,
-          confirmButtonText: `✅ ${konsumsiLabel}`,
+          confirmButtonText: "✅ Catat Absensi",
           cancelButtonText: "❌ Batal",
           allowOutsideClick: false,
-          confirmButtonColor: nextKonsumsiNumber === 1 ? "#22c55e" : "#f59e0b",
           focusConfirm: true,
           timer: 5000, // REDUCED to 5s
           timerProgressBar: true,
@@ -518,7 +450,6 @@ export default function QRScannerKonsumsiPage() {
         if (!confirm.isConfirmed) {
           isProcessingRef.current = false;
           lastScannedRef.current = "";
-          isErrorStateRef.current = false;
           
           // FIXED: Only restart if user hasn't stopped manually
           setTimeout(() => {
@@ -531,7 +462,7 @@ export default function QRScannerKonsumsiPage() {
 
         // INSTANT loading indicator
         Swal.fire({
-          title: `⚡ Memproses ${konsumsiLabel}...`,
+          title: "⚡ Memproses Absensi...",
           html: `Lightning fast processing...`,
           allowOutsideClick: false,
           showConfirmButton: false,
@@ -541,42 +472,122 @@ export default function QRScannerKonsumsiPage() {
           },
         });
 
-        const requestBody = {
+        // ENHANCED API call with detailed debugging
+        const cacheKey = `absensi_${parsed.nim}_${kid}_${rid}`;
+        
+        const requestPayload = {
           qr_data: result,
           kegiatan_id: Number(kid),
           kegiatan_rangkaian_id: rid ? Number(rid) : null,
-          jenis_konsumsi: jenis_konsumsi,
-          tanggal: tgl,
         };
         
-        console.log('⚡ ULTRA-FAST API request:', requestBody);
-        console.log(`🚀 Lightning konsumsi: ${konsumsiLabel} for NIM: ${nim}`);
-        
-        // PARALLEL API call with timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-        
-        const response = await fetch("/api/konsumsi/scan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
+        console.log('🚀 Sending API request:', {
+          url: '/api/absensi/scan',
+          method: 'POST',
+          payload: requestPayload,
+          headers: { "Content-Type": "application/json" }
         });
         
-        clearTimeout(timeoutId);
-
-        let jsonData;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // Increased to 10s timeout
+        
+        let response;
         try {
-          jsonData = await response.json();
-        } catch (parseError) {
-          console.error('⚠️ Failed to parse response JSON:', parseError);
+          response = await fetch("/api/absensi/scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestPayload),
+            signal: controller.signal
+          });
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          console.error('❌ Fetch Error:', fetchError);
+          
+          let errorMessage = "Gagal terhubung ke server.";
+          if (typeof fetchError === 'object' && fetchError !== null && 'name' in fetchError && (fetchError as any).name === 'AbortError') {
+            errorMessage = "Request timeout. Server terlalu lama merespons.";
+          } else if (typeof fetchError === 'object' && fetchError !== null && 'message' in fetchError && (fetchError as any).message.includes('NetworkError')) {
+            errorMessage = "Tidak ada koneksi internet.";
+          }
           
           await Swal.fire({
-            title: "❌ Response Error",
-            text: "Server error. Silakan coba lagi.",
+            title: "❌ Connection Error",
+            html: `
+              <div class="text-center">
+                <p class="mb-2">${errorMessage}</p>
+                <div class="bg-gray-50 p-2 rounded text-sm">
+                  <p><strong>Error:</strong> ${typeof fetchError === "object" && fetchError !== null && "message" in fetchError ? (fetchError as any).message : String(fetchError)}</p>
+                </div>
+              </div>
+            `,
             icon: "error",
             confirmButtonText: "OK",
-            timer: 800, // ULTRA FAST - 0.8s
+            timer: 1500,
+            timerProgressBar: true,
+          });
+          
+          isProcessingRef.current = false;
+          lastScannedRef.current = "";
+          return;
+        }
+        
+        clearTimeout(timeoutId);
+        
+        console.log('📡 API Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+
+        let jsonData;
+        let responseText = '';
+        try {
+          responseText = await response.text();
+          console.log('📄 Raw response text:', responseText);
+          
+          if (!responseText.trim()) {
+            throw new Error('Empty response from server');
+          }
+          
+          jsonData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('⚠️ Failed to parse response:', {
+            error: parseError,
+            responseStatus: response.status,
+            responseText: responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''),
+            contentType: response.headers.get('content-type')
+          });
+          
+          let errorTitle = "❌ Server Response Error";
+          let errorMessage = "Server mengembalikan response yang tidak valid.";
+          
+          if (response.status >= 500) {
+            errorTitle = "❌ Server Error";
+            errorMessage = "Terjadi kesalahan pada server. Silakan coba lagi.";
+          } else if (response.status === 404) {
+            errorTitle = "❌ API Not Found";
+            errorMessage = "Endpoint API tidak ditemukan.";
+          } else if (!responseText.trim()) {
+            errorTitle = "❌ Empty Response";
+            errorMessage = "Server tidak mengembalikan data.";
+          }
+          
+          await Swal.fire({
+            title: errorTitle,
+            html: `
+              <div class="text-center">
+                <p class="mb-2">${errorMessage}</p>
+                <div class="bg-gray-50 p-2 rounded text-xs text-left">
+                  <p><strong>Status:</strong> ${response.status} ${response.statusText}</p>
+                  <p><strong>Content-Type:</strong> ${response.headers.get('content-type') || 'Unknown'}</p>
+                  ${responseText ? `<p><strong>Response:</strong> ${responseText.substring(0, 100)}${responseText.length > 100 ? '...' : ''}</p>` : ''}
+                </div>
+              </div>
+            `,
+            icon: "error",
+            confirmButtonText: "OK",
+            timer: 2000,
             timerProgressBar: true,
           });
           
@@ -585,117 +596,306 @@ export default function QRScannerKonsumsiPage() {
           return;
         }
 
-        console.log('✅ LIGHTNING API Response:', jsonData);
+        console.log('✅ API Response parsed successfully:', {
+          success: jsonData.success,
+          message: jsonData.message,
+          data: jsonData.data,
+          fullResponse: jsonData
+        });
 
         if (jsonData.success) {
           beep(true);
           
-          const responseData = jsonData.data;
-          const konsumsi = responseData?.konsumsi || {};
-          
-          // INVALIDATE CACHE after successful scan
-          processingCacheRef.current.delete(`konsumsi_${nim}_${kid}_${tgl}_${rid}`);
+          // CACHE SUCCESS for avoiding duplicates
+          processingCacheRef.current.set(cacheKey, jsonData);
           
           await Swal.fire({
-            title: `🎉 ${konsumsiLabel} Berhasil!`,
+            title: "🎉 Absensi Berhasil!",
             html: `
               <div class="text-center">
-                <p class="text-green-600 font-bold text-lg mb-2">⚡ ${konsumsiLabel} berhasil dicatat!</p>
-                <hr class="my-2">
-                <div class="text-left bg-gray-50 p-2 rounded text-sm">
-                  <p><strong>Nama:</strong> ${responseData?.panitia?.nama || parsed.nama}</p>
-                  <p><strong>NIM:</strong> ${responseData?.panitia?.nim || nim}</p>
-                  <p><strong>Divisi:</strong> ${responseData?.panitia?.divisi || parsed.divisi}</p>
+                <p class="text-green-600 font-bold text-lg mb-3">✅ Anda sudah melakukan absensi</p>
+                <hr class="my-3">
+                <div class="text-left bg-gray-50 p-3 rounded text-sm space-y-1">
+                  <p><strong>Nama:</strong> ${parsed.nama}</p>
+                  <p><strong>NIM:</strong> ${parsed.nim}</p>
+                  <p><strong>Divisi:</strong> ${parsed.divisi}</p>
+                  <p><strong>Status:</strong> <span class="text-green-600 font-bold">Hadir ✅</span></p>
                 </div>
-                <hr class="my-2">
-                <div class="text-sm">
-                  <p class="text-green-600">
-                    ${konsumsi.konsumsi_lengkap ? 'Konsumsi 1 ✅ | Konsumsi 2 ✅' : (nextKonsumsiNumber === 1 ? 'Konsumsi 1 ✅' : 'Konsumsi 1 ✅ | Konsumsi 2 ✅')}
-                  </p>
-                  ${konsumsi.konsumsi_lengkap ? '<p class="text-orange-600 font-bold mt-1">🎉 Konsumsi Lengkap!</p>' : '<p class="text-blue-600 mt-1">💡 Bisa scan lagi</p>'}
+                <hr class="my-3">
+                <div class="text-left bg-blue-50 p-3 rounded text-sm space-y-1">
+                  <p><strong>Nama Kegiatan:</strong> ${kNama}</p>
+                  <p><strong>Nama Rangkaian:</strong> ${rid ? (jsonData.data?.rangkaian_nama || 'Tersedia') : 'Tidak ada rangkaian'}</p>
+                  <p><strong>Tanggal:</strong> ${currentTanggalFormatted}</p>
                 </div>
+                ${jsonData.message ? `<hr class="my-2"><p class="text-sm text-gray-600">${jsonData.message}</p>` : ''}
               </div>
             `,
             icon: "success",
             confirmButtonText: "OK",
-            timer: konsumsi.konsumsi_lengkap ? 900 : 700, // ULTRA FAST - 0.9s/0.7s
+            timer: 1000, // Diperpanjang sedikit untuk membaca info lengkap
             timerProgressBar: true,
             showClass: { popup: 'animate__animated animate__bounceIn animate__faster' },
             hideClass: { popup: 'animate__animated animate__fadeOut animate__faster' }
           });
         } else {
-          // ULTRA-FAST error handling
+          // ✅ ENHANCED error handling untuk Absensi dengan DETAILED DIVISI VALIDATION
           console.log('❌ API returned error:', {
             status: response.status,
             success: jsonData.success,
             message: jsonData.message,
             data: jsonData.data
           });
-          
-          let errorTitle = "❌ Gagal Menyimpan Konsumsi";
-          let errorMessage = jsonData.message || "Terjadi kesalahan saat menyimpan data konsumsi.";
+
+          let errorTitle = "❌ Absensi Gagal";
+          let errorMessage = jsonData.message || "Terjadi kesalahan saat melakukan absensi";
           let errorIcon: 'error' | 'warning' = 'error';
           let errorHtml = '';
-          
+
           if (response.status === 403) {
+            // ✅ ENHANCED: Divisi tidak diizinkan dengan info super detail
             errorTitle = "🚫 Divisi Tidak Diizinkan";
             errorIcon = 'warning';
             
-            if (jsonData.data?.divisi_yang_diizinkan) {
+            if (jsonData.data?.divisi_yang_diizinkan && jsonData.data?.panitia_divisi) {
+              const allowedDivisi = jsonData.data.divisi_yang_diizinkan;
+              const panitiaDiv = jsonData.data.panitia_divisi;
+              
+              errorHtml = `
+                <div class="text-left">
+                  <div class="text-center mb-3">
+                    <p class="font-bold text-red-600 text-lg">🚫 AKSES DITOLAK</p>
+                    <p class="text-sm text-gray-600">Divisi Anda tidak diizinkan untuk kegiatan ini</p>
+                  </div>
+                  
+                  <hr class="my-3 border-gray-300">
+                  
+                  <!-- Info Panitia -->
+                  <div class="bg-red-50 p-3 rounded-lg mb-3 border-l-4 border-red-400">
+                    <p class="font-bold text-red-800 mb-2 flex items-center">
+                      <span class="mr-2">👤</span> Data Panitia Saat Ini
+                    </p>
+                    <div class="space-y-1 text-sm">
+                      <p><strong>Nama:</strong> ${parsed.nama}</p>
+                      <p><strong>NIM:</strong> ${parsed.nim}</p>
+                      <p><strong>Divisi:</strong> 
+                        <span class="bg-red-200 text-red-800 px-2 py-1 rounded font-bold">
+                          ${panitiaDiv}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <!-- Info Kegiatan -->
+                  <div class="bg-blue-50 p-3 rounded-lg mb-3 border-l-4 border-blue-400">
+                    <p class="font-bold text-blue-800 mb-2 flex items-center">
+                      <span class="mr-2">📋</span> Info Kegiatan
+                    </p>
+                    <div class="space-y-1 text-sm">
+                      <p><strong>Nama:</strong> ${kNama}</p>
+                      <p><strong>Tanggal:</strong> ${currentTanggalFormatted}</p>
+                      ${rid ? `<p><strong>Rangkaian:</strong> ${jsonData.data?.rangkaian_nama || 'Multiple Event'}</p>` : ''}
+                    </div>
+                  </div>
+                  
+                  <!-- Divisi Yang Diizinkan -->
+                  <div class="bg-green-50 p-3 rounded-lg border-l-4 border-green-400">
+                    <p class="font-bold text-green-800 mb-2 flex items-center">
+                      <span class="mr-2">✅</span> Divisi Yang Diizinkan
+                    </p>
+                    <div class="grid grid-cols-1 gap-2 text-sm">
+                      ${allowedDivisi.slice(0, 6).map((d: any, index: number) => 
+                        `<div class="flex items-center gap-2 p-2 bg-white rounded border">
+                          <span class="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span>
+                          <span class="font-medium text-green-700">${d.nama}</span>
+                        </div>`
+                      ).join('')}
+                      ${allowedDivisi.length > 6 ? 
+                        `<div class="text-center text-gray-600 text-xs mt-2 p-2 bg-gray-100 rounded">
+                          + ${allowedDivisi.length - 6} divisi lainnya
+                        </div>` 
+                        : ''}
+                    </div>
+                  </div>
+                  
+                  <hr class="my-3 border-gray-300">
+                  
+                  <!-- Call to Action -->
+                  <div class="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-400 text-center">
+                    <p class="text-yellow-800 font-medium text-sm">
+                      💡 <strong>Solusi:</strong> Hubungi koordinator untuk:
+                    </p>
+                    <ul class="text-xs text-yellow-700 mt-2 space-y-1">
+                      <li>• Konfirmasi divisi yang benar</li>
+                      <li>• Update data divisi di sistem</li>
+                      <li>• Izin khusus untuk kegiatan ini</li>
+                    </ul>
+                  </div>
+                </div>
+              `;
+            } else if (jsonData.data?.divisi_yang_diizinkan) {
+              // Fallback jika panitia_divisi tidak ada
               const allowedDivisi = jsonData.data.divisi_yang_diizinkan;
               
               errorHtml = `
                 <div class="text-left">
-                  <p class="mb-2 text-center font-semibold">${errorMessage}</p>
-                  <hr class="my-2">
-                  <div class="bg-gray-50 p-2 rounded mb-2 text-sm">
+                  <p class="mb-3 text-center font-semibold text-red-600">${errorMessage}</p>
+                  <hr class="my-3">
+                  <div class="bg-gray-50 p-3 rounded mb-3 text-sm border-l-4 border-red-400">
                     <p><strong>Panitia:</strong> ${parsed.nama}</p>
                     <p><strong>Divisi:</strong> <span class="text-red-600 font-bold">${parsed.divisi}</span></p>
                   </div>
-                  <div class="bg-blue-50 p-2 rounded text-sm">
-                    <p class="font-semibold text-blue-800 mb-1">📋 Divisi Diizinkan:</p>
-                    ${allowedDivisi.slice(0, 3).map((d: any) => `<p>• ${d.nama}</p>`).join('')}
-                    ${allowedDivisi.length > 3 ? `<p class="text-gray-600">+ ${allowedDivisi.length - 3} lainnya</p>` : ''}
+                  <div class="bg-blue-50 p-3 rounded text-sm border-l-4 border-green-400">
+                    <p class="font-semibold text-green-800 mb-2">📋 Divisi Diizinkan:</p>
+                    ${allowedDivisi.slice(0, 4).map((d: any) => `<p>• ${d.nama}</p>`).join('')}
+                    ${allowedDivisi.length > 4 ? `<p class="text-gray-600">+ ${allowedDivisi.length - 4} lainnya</p>` : ''}
                   </div>
+                </div>
+              `;
+            } else {
+              // Fallback minimal
+              errorHtml = `
+                <div class="text-center">
+                  <p class="mb-3 font-semibold text-red-600">${errorMessage}</p>
+                  <div class="bg-red-50 p-3 rounded text-sm">
+                    <p><strong>Panitia:</strong> ${parsed.nama}</p>
+                    <p><strong>Divisi:</strong> <span class="text-red-600 font-bold">${parsed.divisi}</span></p>
+                  </div>
+                  <p class="text-xs text-gray-600 mt-2">💡 Hubungi koordinator untuk info divisi yang diizinkan</p>
                 </div>
               `;
             }
           } else if (response.status === 409) {
-            errorTitle = "🚫 Konsumsi Ditolak";
+            // Absensi sudah dilakukan
+            errorTitle = "⚠️ Sudah Absen";
             errorIcon = 'warning';
             
-            if (jsonData.message?.includes("MAKSIMUM")) {
-              errorTitle = "❌ Maksimum Tercapai";
-            } else if (jsonData.message?.includes("SUDAH")) {
-              errorTitle = "❌ Sudah Diambil";
+            if (jsonData.message?.includes("Already attended") || jsonData.message?.includes("sudah melakukan absensi")) {
+              errorMessage = "Anda sudah melakukan absensi sebelumnya.";
             }
             
             errorHtml = `
               <div class="text-center">
-                <p class="mb-2 font-semibold">${errorMessage}</p>
-                <div class="bg-gray-50 p-2 rounded text-sm">
-                  <p><strong>Nama:</strong> ${parsed.nama}</p>
-                  <p><strong>NIM:</strong> ${nim}</p>
+                <div class="mb-3">
+                  <p class="text-2xl mb-2">✅</p>
+                  <p class="font-bold text-orange-600 text-lg">Sudah Tercatat</p>
+                  <p class="text-sm text-gray-600">${errorMessage}</p>
+                </div>
+                
+                <hr class="my-3">
+                
+                <div class="bg-orange-50 p-3 rounded text-sm border-l-4 border-orange-400 text-left">
+                  <p class="font-semibold text-orange-800 mb-2">👤 Data Panitia:</p>
+                  <div class="space-y-1">
+                    <p><strong>Nama:</strong> ${parsed.nama}</p>
+                    <p><strong>NIM:</strong> ${parsed.nim}</p>
+                    <p><strong>Divisi:</strong> ${parsed.divisi}</p>
+                  </div>
+                </div>
+                
+                <hr class="my-3">
+                
+                <div class="bg-blue-50 p-3 rounded text-sm border-l-4 border-blue-400 text-left">
+                  <p class="font-semibold text-blue-800 mb-2">📋 Kegiatan:</p>
+                  <div class="space-y-1">
+                    <p><strong>Nama:</strong> ${kNama}</p>
+                    <p><strong>Tanggal:</strong> ${currentTanggalFormatted}</p>
+                  </div>
+                </div>
+                
+                <div class="mt-3 p-2 bg-green-100 rounded">
+                  <p class="text-sm">
+                    <span class="text-green-600 font-bold">✅ Status: HADIR</span>
+                  </p>
                 </div>
               </div>
             `;
           } else if (response.status === 404) {
-            errorTitle = "❌ Panitia Tidak Ditemukan";
+            // Panitia tidak ditemukan
+            errorTitle = "❌ Data Tidak Ditemukan";
+            
+            let notFoundType = "Panitia tidak ditemukan di sistem";
+            if (jsonData.message?.includes("Kegiatan")) {
+              notFoundType = "Kegiatan tidak ditemukan atau tidak aktif";
+            }
+            
             errorHtml = `
               <div class="text-center">
-                <p class="mb-2">${errorMessage}</p>
-                <div class="bg-gray-50 p-2 rounded text-sm">
-                  <p><strong>NIM:</strong> ${nim}</p>
-                  <p><strong>Nama:</strong> ${parsed.nama}</p>
+                <div class="mb-3">
+                  <p class="text-4xl mb-2">🔍</p>
+                  <p class="font-bold text-red-600 text-lg">Data Tidak Ditemukan</p>
+                  <p class="text-sm text-gray-600">${notFoundType}</p>
+                </div>
+                
+                <hr class="my-3">
+                
+                <div class="bg-red-50 p-3 rounded text-sm border-l-4 border-red-400 text-left">
+                  <p class="font-semibold text-red-800 mb-2">❌ Data QR Code:</p>
+                  <div class="space-y-1">
+                    <p><strong>NIM:</strong> ${parsed.nim}</p>
+                    <p><strong>Nama:</strong> ${parsed.nama}</p>
+                    <p><strong>Divisi:</strong> ${parsed.divisi}</p>
+                  </div>
+                </div>
+                
+                <div class="mt-3 bg-yellow-50 p-3 rounded border-l-4 border-yellow-400">
+                  <p class="text-xs text-yellow-800">
+                    💡 <strong>Kemungkinan penyebab:</strong><br>
+                    • Data panitia belum terdaftar<br>
+                    • QR Code sudah kadaluarsa<br>
+                    • Data telah diubah di sistem
+                  </p>
                 </div>
               </div>
             `;
+          } else if (response.status === 400) {
+            // Bad request - QR tidak valid atau data tidak sesuai
+            errorTitle = "❌ Data Tidak Valid";
+            if (jsonData.message?.includes("tidak sesuai")) {
+              errorMessage = "Data QR Code tidak sesuai dengan data panitia di sistem.";
+              errorHtml = `
+                <div class="text-center">
+                  <div class="mb-3">
+                    <p class="text-4xl mb-2">⚠️</p>
+                    <p class="font-bold text-red-600 text-lg">Data Tidak Sesuai</p>
+                    <p class="text-sm text-gray-600">${errorMessage}</p>
+                  </div>
+                  
+                  <hr class="my-3">
+                  
+                  <div class="bg-red-50 p-3 rounded text-sm border-l-4 border-red-400 text-left">
+                    <p class="font-semibold text-red-800 mb-2">❌ Data QR Code:</p>
+                    <div class="space-y-1">
+                      <p><strong>NIM:</strong> ${parsed.nim}</p>
+                      <p><strong>Nama:</strong> ${parsed.nama}</p>
+                      <p><strong>Divisi:</strong> ${parsed.divisi}</p>
+                    </div>
+                  </div>
+                  
+                  <div class="mt-3 bg-yellow-50 p-3 rounded border-l-4 border-yellow-400">
+                    <p class="text-xs text-yellow-800">
+                      💡 QR Code mungkin sudah kadaluarsa atau data telah berubah di sistem
+                    </p>
+                  </div>
+                </div>
+              `;
+            } else {
+              errorHtml = `
+                <div class="text-center">
+                  <p class="mb-2">${errorMessage}</p>
+                  <div class="bg-gray-50 p-2 rounded text-sm">
+                    <p><strong>Status:</strong> ${response.status}</p>
+                  </div>
+                </div>
+              `;
+            }
           } else {
+            // Generic error
             errorHtml = `
               <div class="text-center">
                 <p class="mb-2">${errorMessage}</p>
                 <div class="bg-gray-50 p-2 rounded text-sm">
                   <p><strong>Status:</strong> ${response.status}</p>
+                  <p><strong>Error Code:</strong> ${response.statusText}</p>
                 </div>
               </div>
             `;
@@ -703,19 +903,23 @@ export default function QRScannerKonsumsiPage() {
 
           await Swal.fire({
             title: errorTitle,
-            html: errorHtml || `<div class="text-center"><p>${errorMessage}</p></div>`,
+            html: errorHtml,
             icon: errorIcon,
             confirmButtonText: "OK",
-            timer: 900, // ULTRA FAST - 0.9s
-            width: '420px',
-            timerProgressBar: true,
+            timer: response.status === 403 ? 0 : 1200, // No timer untuk divisi error agar bisa dibaca
+            width: response.status === 403 ? '600px' : '420px', // Lebih lebar untuk divisi error
+            timerProgressBar: response.status !== 403,
             showClass: { popup: 'animate__animated animate__fadeIn animate__faster' },
-            hideClass: { popup: 'animate__animated animate__fadeOut animate__faster' }
+            hideClass: { popup: 'animate__animated animate__fadeOut animate__faster' },
+            customClass: {
+              container: 'swal-divisi-error',
+              popup: response.status === 403 ? 'swal-divisi-popup' : ''
+            }
           });
         }
 
-      } catch (error) {
-        console.error('⚠️ Scan error:', error);
+      } catch (error: any) {
+        console.error("⚠️ Scan error:", error);
         await Swal.fire({
           title: "❌ Error Sistem",
           html: `
@@ -745,7 +949,17 @@ export default function QRScannerKonsumsiPage() {
         }
       }
     },
-    [soundEnabled, kid, rid, kNama, tgl, formatTanggalIndonesia, validateTanggalKegiatan, getKonsumsiStatus, selectedCamera, isScanning]
+    [
+      soundEnabled,
+      kid,
+      rid,
+      kNama,
+      tgl,
+      formatTanggalIndonesia,
+      validateTanggalKegiatan,
+      selectedCamera,
+      isScanning
+    ]
   );
 
   const startScanner = useCallback(async () => {
@@ -758,11 +972,11 @@ export default function QRScannerKonsumsiPage() {
         setIsScanning(true);
         isProcessingRef.current = false;
         lastScannedRef.current = "";
-        
+
         scanControlsRef.current = await scanner.current.decodeFromVideoDevice(
           selectedCamera,
           videoRef.current,
-          (result) => {
+          (result, err) => {
             if (result && !isProcessingRef.current) {
               handleScan(result.getText());
             }
@@ -858,7 +1072,7 @@ export default function QRScannerKonsumsiPage() {
           </button>
         </div>
       )}
-      
+
       {error && (
         <div className="absolute top-4 bg-red-500 text-white p-4 rounded-lg z-50 max-w-md mx-4">
           <span>{error}</span>
@@ -882,7 +1096,7 @@ export default function QRScannerKonsumsiPage() {
       {/* Enhanced gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/40 pointer-events-none"></div>
 
-      {/* ULTRA-ENHANCED Aim Scope with HYPER animations */}
+      {/* ULTRA-ENHANCED Aim Scope with ABSENSI theme (Purple/Violet) */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div
           className="relative flex items-center justify-center"
@@ -893,45 +1107,45 @@ export default function QRScannerKonsumsiPage() {
             maxHeight: isMobile ? "350px" : "450px",
           }}
         >
-          {/* HYPER-animated crosshair */}
+          {/* HYPER-animated crosshair with Purple theme */}
           <div className="absolute inset-0 flex items-center justify-center">
             {/* Ultra-bright animated crosshair */}
             <div
-              className="absolute left-1/2 top-0 h-full w-1 bg-gradient-to-b from-transparent via-cyan-400 to-transparent opacity-90 shadow-lg animate-pulse"
+              className="absolute left-1/2 top-0 h-full w-1 bg-gradient-to-b from-transparent via-purple-400 to-transparent opacity-90 shadow-lg animate-pulse"
               style={{ 
                 transform: "translateX(-50%)",
-                filter: "drop-shadow(0 0 8px #22d3ee)",
+                filter: "drop-shadow(0 0 8px #c084fc)",
                 animation: "pulse 0.5s ease-in-out infinite alternate"
               }}
             />
             <div
-              className="absolute top-1/2 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-90 shadow-lg animate-pulse"
+              className="absolute top-1/2 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-400 to-transparent opacity-90 shadow-lg animate-pulse"
               style={{ 
                 transform: "translateY(-50%)",
-                filter: "drop-shadow(0 0 8px #22d3ee)",
+                filter: "drop-shadow(0 0 8px #c084fc)",
                 animation: "pulse 0.5s ease-in-out infinite alternate"
               }}
             />
             
-            {/* HYPER-animated corner brackets */}
-            <div className="absolute left-0 top-0 w-12 h-12 border-t-4 border-l-4 border-cyan-400 rounded-tl-3xl shadow-lg animate-bounce" style={{ filter: "drop-shadow(0 0 8px #22d3ee)" }} />
-            <div className="absolute right-0 top-0 w-12 h-12 border-t-4 border-r-4 border-cyan-400 rounded-tr-3xl shadow-lg animate-bounce" style={{ filter: "drop-shadow(0 0 8px #22d3ee)" }} />
-            <div className="absolute left-0 bottom-0 w-12 h-12 border-b-4 border-l-4 border-cyan-400 rounded-bl-3xl shadow-lg animate-bounce" style={{ filter: "drop-shadow(0 0 8px #22d3ee)" }} />
-            <div className="absolute right-0 bottom-0 w-12 h-12 border-b-4 border-r-4 border-cyan-400 rounded-br-3xl shadow-lg animate-bounce" style={{ filter: "drop-shadow(0 0 8px #22d3ee)" }} />
+            {/* HYPER-animated corner brackets with Purple theme */}
+            <div className="absolute left-0 top-0 w-12 h-12 border-t-4 border-l-4 border-purple-400 rounded-tl-3xl shadow-lg animate-bounce" style={{ filter: "drop-shadow(0 0 8px #c084fc)" }} />
+            <div className="absolute right-0 top-0 w-12 h-12 border-t-4 border-r-4 border-purple-400 rounded-tr-3xl shadow-lg animate-bounce" style={{ filter: "drop-shadow(0 0 8px #c084fc)" }} />
+            <div className="absolute left-0 bottom-0 w-12 h-12 border-b-4 border-l-4 border-purple-400 rounded-bl-3xl shadow-lg animate-bounce" style={{ filter: "drop-shadow(0 0 8px #c084fc)" }} />
+            <div className="absolute right-0 bottom-0 w-12 h-12 border-b-4 border-r-4 border-purple-400 rounded-br-3xl shadow-lg animate-bounce" style={{ filter: "drop-shadow(0 0 8px #c084fc)" }} />
             
-            {/* HYPER center indicator */}
+            {/* HYPER center indicator with Purple theme */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-8 h-8 rounded-full border-3 border-cyan-400 bg-cyan-400/40 shadow-lg animate-ping" style={{ filter: "drop-shadow(0 0 12px #22d3ee)" }}></div>
-              <div className="absolute w-4 h-4 rounded-full bg-cyan-400 shadow-lg animate-pulse" style={{ filter: "drop-shadow(0 0 8px #22d3ee)" }}></div>
+              <div className="w-8 h-8 rounded-full border-3 border-purple-400 bg-purple-400/40 shadow-lg animate-ping" style={{ filter: "drop-shadow(0 0 12px #c084fc)" }}></div>
+              <div className="absolute w-4 h-4 rounded-full bg-purple-400 shadow-lg animate-pulse" style={{ filter: "drop-shadow(0 0 8px #c084fc)" }}></div>
             </div>
             
-            {/* ULTRA outer frame */}
-            <div className="absolute inset-0 border-3 border-cyan-400/80 rounded-3xl shadow-2xl animate-pulse" style={{ filter: "drop-shadow(0 0 15px #22d3ee)" }}></div>
+            {/* ULTRA outer frame with Purple theme */}
+            <div className="absolute inset-0 border-3 border-purple-400/80 rounded-3xl shadow-2xl animate-pulse" style={{ filter: "drop-shadow(0 0 15px #c084fc)" }}></div>
             
-            {/* HYPER scanning line animation */}
+            {/* HYPER scanning line animation with Purple theme */}
             {isScanning && (
               <div className="absolute inset-0 overflow-hidden rounded-3xl">
-                <div className="w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-ultra-scan" style={{ filter: "drop-shadow(0 0 8px #22d3ee)" }}></div>
+                <div className="w-full h-1 bg-gradient-to-r from-transparent via-purple-400 to-transparent animate-ultra-scan" style={{ filter: "drop-shadow(0 0 8px #c084fc)" }}></div>
               </div>
             )}
           </div>
@@ -958,17 +1172,17 @@ export default function QRScannerKonsumsiPage() {
         </div>
       )}
 
-      {/* HYPER scanning indicator */}
+      {/* HYPER scanning indicator with Purple theme */}
       {isScanning && (
         <div className="absolute top-1/2 left-6 transform -translate-y-1/2 z-40">
-          <div className="flex items-center gap-2 px-4 py-2 bg-cyan-500/90 rounded-full backdrop-blur-sm border border-white/30 shadow-lg animate-pulse">
+          <div className="flex items-center gap-2 px-4 py-2 bg-purple-500/90 rounded-full backdrop-blur-sm border border-white/30 shadow-lg animate-pulse">
             <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
             <span className="text-white text-sm font-bold">⚡ ULTRA SCAN</span>
           </div>
         </div>
       )}
 
-      {/* ULTRA-FAST Controls */}
+      {/* ULTRA-FAST Controls with Purple theme */}
       <div className="absolute bottom-4 flex flex-col items-center gap-4 z-40">
         <div className="flex gap-3">
           {isScanning ? (
@@ -984,7 +1198,7 @@ export default function QRScannerKonsumsiPage() {
               disabled={!dateValidation.isValid}
               className={`px-6 py-3 rounded-xl text-white font-bold shadow-lg transition-all duration-150 transform hover:scale-105 ${
                 dateValidation.isValid
-                  ? "bg-cyan-500 hover:bg-cyan-600 animate-pulse"
+                  ? "bg-purple-500 hover:bg-purple-600 animate-pulse"
                   : dateValidation.isExpired
                   ? "bg-red-500 cursor-not-allowed opacity-50"
                   : "bg-orange-500 cursor-not-allowed opacity-50"
@@ -994,11 +1208,11 @@ export default function QRScannerKonsumsiPage() {
                   ? dateValidation.isExpired
                     ? "Scan tidak diizinkan - kegiatan sudah kadaluarsa"
                     : "Scan tidak diizinkan - kegiatan belum dimulai"
-                  : "Mulai ULTRA-FAST scan QR untuk konsumsi"
+                  : "Mulai ULTRA-FAST scan QR untuk absensi"
               }
             >
               {dateValidation.isValid 
-                ? "⚡ ULTRA-FAST SCAN" 
+                ? "⚡ MULAI SCAN" 
                 : dateValidation.isExpired 
                 ? "⏰ Kadaluarsa" 
                 : "🚀 Belum Dimulai"}
@@ -1037,7 +1251,7 @@ export default function QRScannerKonsumsiPage() {
 
         {/* Return state info */}
         {returnKegiatanId && (
-          <div className="text-xs bg-cyan-600/60 px-3 py-1 rounded text-center backdrop-blur-sm">
+          <div className="text-xs bg-purple-600/60 px-3 py-1 rounded text-center backdrop-blur-sm">
             <p>Kegiatan: {returnKegiatanNama} - {returnDayName}</p>
           </div>
         )}
@@ -1077,17 +1291,17 @@ export default function QRScannerKonsumsiPage() {
           animation: hyper-pulse 0.5s ease-in-out infinite;
         }
         
-        @keyframes lightning-glow {
+        @keyframes lightning-glow-purple {
           0%, 100% {
-            box-shadow: 0 0 10px #22d3ee, 0 0 20px #22d3ee, 0 0 30px #22d3ee;
+            box-shadow: 0 0 10px #c084fc, 0 0 20px #c084fc, 0 0 30px #c084fc;
           }
           50% {
-            box-shadow: 0 0 20px #22d3ee, 0 0 40px #22d3ee, 0 0 60px #22d3ee;
+            box-shadow: 0 0 20px #c084fc, 0 0 40px #c084fc, 0 0 60px #c084fc;
           }
         }
         
-        .animate-lightning-glow {
-          animation: lightning-glow 1s ease-in-out infinite;
+        .animate-lightning-glow-purple {
+          animation: lightning-glow-purple 1s ease-in-out infinite;
         }
       `}</style>
     </div>

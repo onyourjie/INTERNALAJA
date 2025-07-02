@@ -1,6 +1,5 @@
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// testwebpanit/app/api/panitiapeserta/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { db, RowDataPacket } from '@/lib/db';
 import QRCode from 'qrcode';

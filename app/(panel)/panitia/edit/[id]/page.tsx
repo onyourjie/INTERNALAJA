@@ -1,4 +1,4 @@
-// File: app/(panel)/panitia/edit/[id]/page.tsx
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
@@ -10,8 +10,18 @@ interface PageParams {
   id: string
 }
 
+// Define proper type for success handler data
+interface UpdateSuccessData {
+  id: number
+  nama_lengkap: string
+  email: string
+  divisi_id: number
+  jabatan_id: number
+  message?: string
+}
+
 export default function EditPanitiaPage() {
-  const params = useParams() as PageParams
+  const params = useParams()
   const router = useRouter()
   const [panitiaId, setPanitiaId] = useState<number | null>(null)
   const [isValidId, setIsValidId] = useState(true)
@@ -20,30 +30,38 @@ export default function EditPanitiaPage() {
   useEffect(() => {
     // Validate and parse ID from URL params
     if (params?.id) {
-      const id = params.id
-      const parsedId = parseInt(id)
+      // More careful type checking for params.id
+      const id = Array.isArray(params.id) ? params.id[0] : params.id
       
-      console.log('Route params:', params)
-      console.log('Parsing ID:', id, '->', parsedId)
-      
-      if (isNaN(parsedId) || parsedId <= 0) {
-        console.error('Invalid ID:', id)
-        setIsValidId(false)
+      if (typeof id === 'string') {
+        const parsedId = parseInt(id)
         
-        // Show error and redirect
-        Swal.fire({
-          title: 'ID Tidak Valid',
-          text: 'ID panitia yang diminta tidak valid.',
-          icon: 'error',
-          confirmButtonText: 'Kembali ke Daftar',
-          confirmButtonColor: '#EF4444'
-        }).then(() => {
-          router.push('/panitia')
-        })
+        console.log('Route params:', params)
+        console.log('Parsing ID:', id, '->', parsedId)
+        
+        if (isNaN(parsedId) || parsedId <= 0) {
+          console.error('Invalid ID:', id)
+          setIsValidId(false)
+          
+          // Show error and redirect
+          Swal.fire({
+            title: 'ID Tidak Valid',
+            text: 'ID panitia yang diminta tidak valid.',
+            icon: 'error',
+            confirmButtonText: 'Kembali ke Daftar',
+            confirmButtonColor: '#EF4444'
+          }).then(() => {
+            router.push('/panitia')
+          })
+        } else {
+          console.log('Valid ID found:', parsedId)
+          setPanitiaId(parsedId)
+          setIsValidId(true)
+        }
       } else {
-        console.log('Valid ID found:', parsedId)
-        setPanitiaId(parsedId)
-        setIsValidId(true)
+        console.error('Invalid ID type:', typeof id)
+        setIsValidId(false)
+        router.push('/panitia')
       }
     } else {
       console.error('No ID parameter found')
@@ -54,8 +72,8 @@ export default function EditPanitiaPage() {
     setIsInitialized(true)
   }, [params, router])
 
-  // Handle success callback
-  const handleSuccess = (data: any) => {
+  // Handle success callback with proper typing
+  const handleSuccess = (data: UpdateSuccessData) => {
     console.log('Panitia berhasil diperbarui:', data)
     
     // Show redirect confirmation after a delay

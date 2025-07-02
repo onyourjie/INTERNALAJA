@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth"; // Change this line
 import { db, RowDataPacket } from "@/lib/db";
 
 interface PanitiaData extends RowDataPacket {
@@ -21,7 +21,7 @@ export async function GET() {
     if (!session?.user?.email) {
       console.log("❌ Debug: No session or email found");
       return NextResponse.json(
-        { error: "Unauthorized", redirectTo: "/login" },
+        { error: "Unauthorized", redirectTo: "/" },
         { status: 401 }
       );
     }
@@ -46,7 +46,7 @@ export async function GET() {
     if (!rows || rows.length === 0) {
       console.log("❌ Debug: User not found in panitia table");
       return NextResponse.json(
-        { error: "User not found in panitia table", redirectTo: "/login" },
+        { error: "User not found in panitia table", redirectTo: "/" },
         { status: 404 }
       );
     }

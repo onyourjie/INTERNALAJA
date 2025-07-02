@@ -1,19 +1,99 @@
-// File: app/(panel)/layout.tsx
-
+/* eslint-disable @next/next/no-img-element */
 "use client"
 
 import React, { useCallback, useState } from "react"
 import { signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Sidebar from "@/components/Sidebar"
-import ProfileAvatar from "@/components/ProfileAvatar"
 import { useUser } from "@/contexts/UserContext"
 
-export default function PanelLayout({
-  children,
-}: {
+// Type definitions
+interface EnhancedProfileAvatarProps {
+  imageUrl?: string
+  name?: string
+  size?: "sm" | "md" | "lg" | "xl"
+  showBorder?: boolean
+  borderColor?: string
+}
+
+// Enhanced ProfileAvatar Component dengan perfect circle
+const EnhancedProfileAvatar: React.FC<EnhancedProfileAvatarProps> = ({ 
+  imageUrl, 
+  name, 
+  size = "lg",
+  showBorder = true,
+  borderColor = "border-[#4891A1]"
+}) => {
+  const [imageError, setImageError] = useState(false)
+  
+  // Size configurations with proper typing
+  const sizeClasses: Record<string, string> = {
+    sm: "w-8 h-8",
+    md: "w-10 h-10", 
+    lg: "w-12 h-12",
+    xl: "w-16 h-16"
+  }
+  
+  const textSizeClasses: Record<string, string> = {
+    sm: "text-xs",
+    md: "text-sm",
+    lg: "text-base", 
+    xl: "text-xl"
+  }
+
+  // Get initials from name with proper typing
+  const getInitials = (name?: string): string => {
+    if (!name) return "U"
+    return name
+      .split(" ")
+      .map((word: string) => word.charAt(0))
+      .join("")
+      .substring(0, 2)
+      .toUpperCase()
+  }
+
+  const baseClasses = `
+    ${sizeClasses[size]} 
+    rounded-full 
+    flex 
+    items-center 
+    justify-center 
+    overflow-hidden 
+    relative
+    ${showBorder ? `border-2 ${borderColor}` : ''}
+  `
+
+  return (
+    <div className={baseClasses}>
+      {imageUrl && !imageError ? (
+        <img
+          src={imageUrl}
+          alt={name || "Profile"}
+          className="w-full h-full object-cover object-center"
+          onError={() => setImageError(true)}
+          onLoad={(e) => {
+            // Ensure image is properly loaded and centered
+            const target = e.currentTarget as HTMLImageElement
+            target.style.objectPosition = "center center"
+          }}
+        />
+      ) : (
+        <div 
+          className={`w-full h-full flex items-center justify-center text-white font-semibold ${textSizeClasses[size]}`}
+          style={{ backgroundColor: '#4891A1' }}
+        >
+          {getInitials(name)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface PanelLayoutProps {
   children: React.ReactNode
-}) {
+}
+
+export default function PanelLayout({ children }: PanelLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const { userData, loading, error } = useUser()
@@ -63,7 +143,10 @@ export default function PanelLayout({
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div 
+            className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4"
+            style={{ borderBottomColor: '#4891A1' }}
+          ></div>
           <p className="text-gray-600">Memuat data user...</p>
         </div>
       </div>
@@ -129,7 +212,8 @@ export default function PanelLayout({
 
             {/* Logo di tengah */}
             <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-900 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" 
+                   style={{ backgroundColor: '#4891A1' }}>
                 <span className="text-white font-bold text-sm">RB</span>
               </div>
               <span className="text-base font-semibold text-gray-800">
@@ -142,63 +226,87 @@ export default function PanelLayout({
         {/* Area konten */}
         <main className={`flex-1 ${isPITUser ? 'lg:ml-64' : ''}`}>
           <div className="max-w-7xl mx-auto px-4 py-6 lg:px-6 lg:py-8">
-            {/* Logout Button - Always visible at top right */}
-            <div className="flex justify-end mb-4">
-              <button
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 
-                           disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-                aria-label="Logout"
-              >
-                {isLoggingOut ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span className="text-sm font-medium">Logging out...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg 
-                      className="w-4 h-4" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                      <polyline points="16,17 21,12 16,7"></polyline>
-                      <line x1="21" y1="12" x2="9" y2="12"></line>
-                    </svg>
-                    <span className="text-sm font-medium">Logout</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Tampilkan informasi jika bukan user PIT */}
-            {!isPITUser && userData && (
-              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <ProfileAvatar 
-                    imageUrl={userData.profile_image} // Prioritas users.image
-                    name={userData.nama_lengkap}
-                    size="lg"
-                    showBorder={true}
-                    borderColor="border-blue-300"
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">
-                      Selamat datang, {userData.nama_lengkap}
-                    </p>
-                    <p className="text-xs text-blue-700">
-                      {userData.jabatan_nama} - {userData.divisi_nama}
-                    </p>
+            {/* Header dengan Welcome dan Logout Button untuk SEMUA USER */}
+            <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-sm" 
+                 style={{
+                   background: 'linear-gradient(135deg, #ffffff 0%, rgba(72, 145, 161, 0.03) 100%)',
+                   borderColor: 'rgba(72, 145, 161, 0.2)',
+                   boxShadow: '0 4px 6px -1px rgba(72, 145, 161, 0.1), 0 2px 4px -1px rgba(72, 145, 161, 0.06)'
+                 }}>
+              <div className="flex items-center justify-between">
+                {/* Welcome Message - untuk SEMUA divisi */}
+                {userData && (
+                  <div className="flex items-center gap-3">
+                    <EnhancedProfileAvatar 
+                      imageUrl={userData.profile_image ?? undefined}
+                      name={userData.nama_lengkap}
+                      size="lg"
+                      showBorder={true}
+                      borderColor="border-[#4891A1]"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        Selamat datang, {userData.nama_lengkap}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {userData.jabatan_nama} - {userData.divisi_nama}
+                      </p>
+                    </div>
                   </div>
+                )}
+
+                {/* Spacer untuk mendorong logout ke kanan */}
+                <div className="flex-1"></div>
+
+                {/* Logout Button - Selalu di kanan untuk semua user */}
+                <div className="ml-auto">
+                  <button
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="flex items-center gap-2 px-4 py-2 text-white rounded-lg 
+                               disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm
+                               hover:shadow-md transform hover:-translate-y-0.5"
+                    style={{
+                      backgroundColor: '#4891A1',
+                      boxShadow: '0 2px 4px rgba(72, 145, 161, 0.3)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#3a7a87'
+                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(72, 145, 161, 0.4)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#4891A1'
+                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(72, 145, 161, 0.3)'
+                    }}
+                    aria-label="Logout"
+                  >
+                    {isLoggingOut ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span className="text-sm font-medium">Logging out...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg 
+                          className="w-4 h-4" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                          <polyline points="16,17 21,12 16,7"></polyline>
+                          <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        <span className="text-sm font-medium">Logout</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
             
             {children}
           </div>

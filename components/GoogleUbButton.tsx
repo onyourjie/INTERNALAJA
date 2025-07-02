@@ -1,3 +1,5 @@
+// File: components/GoogleUbButton.tsx (Updated)
+
 "use client";
 
 import { signIn } from "next-auth/react";
@@ -8,7 +10,7 @@ export default function GoogleUbButton() {
     <button
       onClick={() =>
         signIn("google", {
-          callbackUrl: "/dashboard", // arahkan ke dashboard setelah login
+          callbackUrl: "/auth/redirect-checker", // Redirect ke checker untuk divisi-based routing
         })
       }
       className="w-full max-w-sm mx-auto flex items-center justify-center gap-3 rounded-lg border border-gray-300 px-4 py-2 shadow-sm transition hover:bg-gray-100 active:scale-95 bg-white"

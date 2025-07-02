@@ -3,11 +3,93 @@ import { useSession, signOut } from "next-auth/react";
 import GoogleUbButton from "@/components/GoogleUbButton";
 import LoginErrorHandler from "@/components/LoginErrorHandler";
 
-export default function Page() {
-  const { data: session, status } = useSession();
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useUser } from "@/contexts/UserContext"
 
-  if (status === "loading") {
-    return <p className="text-center mt-10 text-gray-600">Loading…</p>;
+export default function HomePage() {
+  const { data: session, status } = useSession()
+  const { userData, loading: userLoading } = useUser()
+  const router = useRouter()
+  const [isRedirecting, setIsRedirecting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Handle URL error parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const errorParam = urlParams.get('error')
+    
+    if (errorParam) {
+      switch (errorParam) {
+        case 'EmailNotStudentUB':
+          setError('Hanya email @student.ub.ac.id yang diizinkan')
+          break
+        case 'NotRegisteredPanitia':
+          setError('Email Anda tidak terdaftar sebagai panitia')
+          break
+        case 'DatabaseError':
+          setError('Terjadi kesalahan database. Silakan coba lagi.')
+          break
+        case 'UserDataError':
+          setError('Gagal memuat data user. Silakan login ulang.')
+          break
+        default:
+          setError('Terjadi kesalahan tidak dikenal')
+      }
+      
+      // Clear error from URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [])
+
+  // Auto redirect for authenticated users
+  useEffect(() => {
+    const handleAutoRedirect = async () => {
+      // Jika masih loading, tunggu
+      if (status === 'loading' || userLoading) {
+        return
+      }
+
+      // Jika tidak ada session, tidak perlu redirect
+      if (status === 'unauthenticated' || !session) {
+        return
+      }
+
+      // Jika ada session tapi belum ada userData, tunggu
+      if (!userData) {
+        return
+      }
+
+      // Redirect berdasarkan divisi
+      setIsRedirecting(true)
+      
+      try {
+        if (userData.isPIT) {
+          // PIT user ke panel
+          router.push('/panitia')
+        } else if (['KESTARI', 'KONSUMSI'].includes(userData.divisi_nama)) {
+          // Divisi tertentu ke dashboard panitia peserta
+          const divisiPath = userData.divisi_nama.toLowerCase()
+          router.push(`/dashboard${divisiPath}`)
+        } else {
+          // Divisi lain ke dashboard umum (jika ada)
+          router.push('/dashboard')
+        }
+      } catch (error) {
+        console.error('Redirect error:', error)
+        setIsRedirecting(false)
+      }
+    }
+
+    handleAutoRedirect()
+  }, [session, status, userData, userLoading, router])
+
+  const handleSignIn = () => {
+    setError(null)
+    signIn('google', { 
+      callbackUrl: '/',
+      redirect: true 
+    })
   }
 
   return (

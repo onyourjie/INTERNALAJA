@@ -1,4 +1,3 @@
-// app/api/konsumsi/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { db, RowDataPacket } from '@/lib/db';
 
@@ -24,10 +23,10 @@ interface KonsumsiDetailRow extends RowDataPacket {
 // atau fallback ke panitia_id + kegiatan_id + tanggal + rangkaian
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const idParam = params.id;
+    const { id: idParam } = await context.params; // Await the params promise
     const { searchParams } = new URL(request.url);
     const kegiatan_id = searchParams.get('kegiatan_id');
     const tanggal = searchParams.get('tanggal');
@@ -175,10 +174,10 @@ export async function GET(
 // PUT - Update status konsumsi (kedua jenis sekaligus, spesifik event/tanggal/rangkaian)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const panitiaId = params.id;
+    const { id: panitiaId } = await context.params; // Await the params promise
     const { searchParams } = new URL(request.url);
     const kegiatan_id = searchParams.get('kegiatan_id');
     const tanggal = searchParams.get('tanggal');

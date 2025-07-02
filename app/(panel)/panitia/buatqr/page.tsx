@@ -13,6 +13,11 @@ import {
 } from 'lucide-react';
 import DownloadQRTemplate from '@/components/DownloadQRTemplate';
 
+// Shared type definitions that match the component interface
+type QRPositionPreset = 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center' | 'bottom-center' | 'left-center' | 'right-center' | 'custom';
+
+type TextOverlayPreset = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'custom';
+
 // Enhanced interfaces with text overlay
 interface PesertaData {
   id: number;
@@ -25,7 +30,7 @@ interface PesertaData {
 }
 
 interface QRPosition {
-  preset: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center' | 'bottom-center' | 'left-center' | 'right-center' | 'custom';
+  preset: QRPositionPreset;
   offsetX: number;
   offsetY: number;
   scale: number;
@@ -34,7 +39,7 @@ interface QRPosition {
 // NEW: Text overlay interface
 interface TextOverlay {
   enabled: boolean;
-  preset: 'center' | 'top' | 'bottom' | 'left' | 'right' | 'custom';
+  preset: TextOverlayPreset;
   offsetX: number;
   offsetY: number;
   fontSize: number;

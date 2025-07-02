@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // app/api/konsumsi/scan/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db, RowDataPacket } from "@/lib/db";

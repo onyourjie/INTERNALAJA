@@ -1,4 +1,3 @@
-// File: /api/konsumsi/check/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { db, RowDataPacket } from '@/lib/db';
 

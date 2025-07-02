@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client"
 
@@ -701,7 +703,7 @@ export default function EditAdmin({ panitiaId, onSuccess, onCancel, className }:
               <p className="text-red-500 text-xs mt-1">Nama lengkap minimal 2 karakter</p>
             )}
             {form.nama_lengkap !== originalData?.nama_lengkap && form.nama_lengkap.trim().length >= 2 && (
-              <p className="text-yellow-600 text-xs mt-1">Nama akan diubah dari "{originalData?.nama_lengkap}"</p>
+              <p className="text-yellow-600 text-xs mt-1">Nama akan diubah dari &rdquo;{originalData?.nama_lengkap}&rdquo;</p>
             )}
           </div>
 

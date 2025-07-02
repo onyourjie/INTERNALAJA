@@ -1,21 +1,13 @@
-// File: app/login/page.tsx
-
 "use client";
 
-import { useState, useEffect } from 'react';
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import Link from 'next/link';
-import { useSession } from 'next-auth/react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 
-export default function Login() {
-    const { data: session, status } = useSession();
+export default function LoginPage() {
     const router = useRouter();
-    const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { status } = useSession();
 
-    // Redirect jika sudah login
     useEffect(() => {
         if (status === "authenticated" && session?.user) {
             router.push("/auth/redirect-checker");

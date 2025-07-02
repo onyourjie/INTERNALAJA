@@ -1,4 +1,3 @@
-// app/api/debug/qr/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { db, RowDataPacket } from '@/lib/db';
 
